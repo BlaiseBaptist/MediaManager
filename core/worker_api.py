@@ -1,0 +1,94 @@
+from pathlib import Path
+
+from django.conf import settings
+from django.http import FileResponse, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_GET
+
+from .models import MediaFile, TranscodeJob
+
+
+def _authenticate_worker(request) -> HttpResponse | None:
+    token = getattr(settings, "MEDIA_MANAGER_AUTH_TOKEN", None)
+    if not token:
+        return None
+
+    header = request.headers.get("Authorization", "")
+    expected = f"Bearer {token}"
+    if header != expected:
+        return HttpResponse(status=401)
+    return None
+
+
+def _job_filename(job: TranscodeJob) -> str:
+    if job.media_file_id and job.media_file.file_name:
+        return job.media_file.file_name
+    candidate = Path(job.input_path).name
+    return candidate or "input.bin"
+
+
+def _job_payload(request, job: TranscodeJob) -> dict[str, str]:
+    return {
+        "id": str(job.id),
+        "input_url": request.build_absolute_uri(reverse("worker_job_input", args=[job.id])),
+        "filename": _job_filename(job),
+    }
+
+
+def _claim_next_job() -> TranscodeJob | None:
+    candidate = (
+        TranscodeJob.objects.select_related("source", "media_file")
+        .filter(status=TranscodeJob.Status.PENDING)
+        .order_by("priority", "-created_at")
+        .first()
+    )
+    if candidate is None:
+        return None
+
+    updated = (
+        TranscodeJob.objects.filter(pk=candidate.pk, status=TranscodeJob.Status.PENDING)
+        .update(status=TranscodeJob.Status.RUNNING, error_message="", updated_at=timezone.now())
+    )
+    if not updated:
+        return None
+
+    if candidate.media_file_id:
+        MediaFile.objects.filter(pk=candidate.media_file_id).update(
+            stage=MediaFile.Stage.TRANSCODING,
+            is_present=True,
+            updated_at=timezone.now(),
+        )
+
+    candidate.refresh_from_db()
+    return candidate
+
+
+@require_GET
+def worker_next_job(request):
+    auth_error = _authenticate_worker(request)
+    if auth_error is not None:
+        return auth_error
+
+    job = _claim_next_job()
+    if job is None:
+        return HttpResponse(status=204)
+
+    return JsonResponse(_job_payload(request, job))
+
+
+@require_GET
+def worker_job_input(request, job_id: int):
+    auth_error = _authenticate_worker(request)
+    if auth_error is not None:
+        return auth_error
+
+    job = get_object_or_404(TranscodeJob.objects.select_related("media_file"), pk=job_id)
+    source_path = job.media_file.absolute_path if job.media_file_id else job.input_path
+    file_path = Path(source_path)
+    if not file_path.is_file():
+        return HttpResponse(status=404)
+
+    filename = _job_filename(job)
+    return FileResponse(file_path.open("rb"), as_attachment=True, filename=filename)
