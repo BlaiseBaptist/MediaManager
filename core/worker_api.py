@@ -11,6 +11,32 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .models import MediaFile, TranscodeJob, TranscodeProfile
 
+BLOCKED_FFMPEG_FLAGS = {
+    "-c",
+    "-codec",
+    "-c:v",
+    "-codec:v",
+    "-c:a",
+    "-codec:a",
+    "-f",
+    "-map",
+    "-vn",
+    "-an",
+    "-sn",
+    "-dn",
+}
+
+FLAGS_WITH_VALUES = {
+    "-c",
+    "-codec",
+    "-c:v",
+    "-codec:v",
+    "-c:a",
+    "-codec:a",
+    "-f",
+    "-map",
+}
+
 
 def _authenticate_worker(request) -> HttpResponse | None:
     token = getattr(settings, "MEDIA_MANAGER_AUTH_TOKEN", None)
@@ -58,6 +84,21 @@ def _request_json(request) -> dict[str, object]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _sanitize_ffmpeg_args(args: list[str]) -> list[str]:
+    sanitized: list[str] = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in BLOCKED_FFMPEG_FLAGS:
+            if arg in FLAGS_WITH_VALUES:
+                skip_next = True
+            continue
+        sanitized.append(arg)
+    return sanitized
+
+
 def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
     profile = TranscodeProfile.load()
     payload = {
@@ -69,7 +110,7 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
         "quality": profile.transcode_quality,
         "video_codec": profile.transcode_video_codec,
         "audio_codec": profile.transcode_audio_codec,
-        "ffmpeg_args": profile.transcode_ffmpeg_args,
+        "ffmpeg_args": _sanitize_ffmpeg_args(profile.transcode_ffmpeg_args),
     }
     payload["delivery"] = {
         "output_url": request.build_absolute_uri(reverse("worker_job_output", args=[job.id])),

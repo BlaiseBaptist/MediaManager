@@ -61,21 +61,47 @@ class MediaMetadata(models.Model):
 
 
 class TranscodeProfile(models.Model):
-    target_container_contains = models.CharField(max_length=120, blank=True, default="matroska")
+    FIXED_TRANSCODE_QUALITY = "23"
+    FIXED_TRANSCODE_VIDEO_CODEC = "libaom-av1"
+    FIXED_TRANSCODE_AUDIO_CODEC = "libopus"
+    FIXED_OUTPUT_EXTENSION = ".mkv"
+    FIXED_TARGET_CONTAINER_CONTAINS = "matroska"
+    FIXED_TARGET_VIDEO_CODECS = ["av1"]
+    FIXED_TARGET_AUDIO_CODECS = ["opus"]
+    FIXED_TARGET_SUBTITLE_CODECS: list[str] = []
+
+    target_container_contains = models.CharField(max_length=120, blank=True, default=FIXED_TARGET_CONTAINER_CONTAINS)
     target_video_codecs = models.JSONField(default=list, blank=True)
     target_audio_codecs = models.JSONField(default=list, blank=True)
     target_subtitle_codecs = models.JSONField(default=list, blank=True)
-    transcode_quality = models.CharField(max_length=32, blank=True, default="23")
-    transcode_video_codec = models.CharField(max_length=120, blank=True, default="libx264")
-    transcode_audio_codec = models.CharField(max_length=120, blank=True, default="aac")
+    transcode_quality = models.CharField(max_length=32, blank=True, default=FIXED_TRANSCODE_QUALITY)
+    transcode_video_codec = models.CharField(max_length=120, blank=True, default=FIXED_TRANSCODE_VIDEO_CODEC)
+    transcode_audio_codec = models.CharField(max_length=120, blank=True, default=FIXED_TRANSCODE_AUDIO_CODEC)
     transcode_ffmpeg_args = models.JSONField(default=list, blank=True)
-    output_extension = models.CharField(max_length=16, blank=True, default=".mp4")
+    output_extension = models.CharField(max_length=16, blank=True, default=FIXED_OUTPUT_EXTENSION)
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @classmethod
     def load(cls) -> "TranscodeProfile":
         profile, _ = cls.objects.get_or_create(pk=1)
+        fixed_values = {
+            "target_container_contains": cls.FIXED_TARGET_CONTAINER_CONTAINS,
+            "target_video_codecs": cls.FIXED_TARGET_VIDEO_CODECS,
+            "target_audio_codecs": cls.FIXED_TARGET_AUDIO_CODECS,
+            "target_subtitle_codecs": cls.FIXED_TARGET_SUBTITLE_CODECS,
+            "transcode_quality": cls.FIXED_TRANSCODE_QUALITY,
+            "transcode_video_codec": cls.FIXED_TRANSCODE_VIDEO_CODEC,
+            "transcode_audio_codec": cls.FIXED_TRANSCODE_AUDIO_CODEC,
+            "output_extension": cls.FIXED_OUTPUT_EXTENSION,
+        }
+        changed = False
+        for field_name, expected in fixed_values.items():
+            if getattr(profile, field_name) != expected:
+                setattr(profile, field_name, expected)
+                changed = True
+        if changed:
+            profile.save(update_fields=[*fixed_values.keys(), "updated_at"])
         return profile
 
     def __str__(self) -> str:

@@ -53,7 +53,9 @@ class WorkerAPITests(TestCase):
         self.assertEqual(payload["filename"], "Example Movie.mkv")
         self.assertTrue(payload["input_url"].startswith("http://testserver/api/media/jobs/"))
         self.assertEqual(payload["transcode"]["quality"], "23")
-        self.assertEqual(payload["delivery"]["filename"], "Example Movie.mp4")
+        self.assertEqual(payload["transcode"]["video_codec"], "libaom-av1")
+        self.assertEqual(payload["transcode"]["audio_codec"], "libopus")
+        self.assertEqual(payload["delivery"]["filename"], "Example Movie.mkv")
 
         job.refresh_from_db()
         self.assertEqual(job.status, TranscodeJob.Status.RUNNING)

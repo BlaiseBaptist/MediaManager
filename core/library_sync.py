@@ -178,18 +178,18 @@ def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
 
 def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool:
     format_name = _format_name(probe_data).lower()
-    container_requirement = (profile.target_container_contains or "").strip().lower()
-    container_ok = not container_requirement or container_requirement in format_name
+    container_requirement = (profile.target_container_contains or TranscodeProfile.FIXED_TARGET_CONTAINER_CONTAINS).strip().lower()
+    container_ok = container_requirement in format_name
     video_codecs = _stream_codecs(probe_data, "video")
     audio_codecs = _stream_codecs(probe_data, "audio")
     subtitle_codecs = _stream_codecs(probe_data, "subtitle")
 
-    target_video_codecs = [codec.strip().lower() for codec in profile.target_video_codecs if str(codec).strip()]
-    target_audio_codecs = [codec.strip().lower() for codec in profile.target_audio_codecs if str(codec).strip()]
-    target_subtitle_codecs = [codec.strip().lower() for codec in profile.target_subtitle_codecs if str(codec).strip()]
+    target_video_codecs = [codec.strip().lower() for codec in (profile.target_video_codecs or TranscodeProfile.FIXED_TARGET_VIDEO_CODECS) if str(codec).strip()]
+    target_audio_codecs = [codec.strip().lower() for codec in (profile.target_audio_codecs or TranscodeProfile.FIXED_TARGET_AUDIO_CODECS) if str(codec).strip()]
+    target_subtitle_codecs = [codec.strip().lower() for codec in (profile.target_subtitle_codecs or TranscodeProfile.FIXED_TARGET_SUBTITLE_CODECS) if str(codec).strip()]
 
-    video_ok = not target_video_codecs or (bool(video_codecs) and all(codec in target_video_codecs for codec in video_codecs))
-    audio_ok = not target_audio_codecs or (bool(audio_codecs) and all(codec in target_audio_codecs for codec in audio_codecs))
+    video_ok = bool(video_codecs) and all(codec in target_video_codecs for codec in video_codecs)
+    audio_ok = bool(audio_codecs) and all(codec in target_audio_codecs for codec in audio_codecs)
     subtitle_ok = not target_subtitle_codecs or (
         bool(subtitle_codecs) and all(codec in target_subtitle_codecs for codec in subtitle_codecs)
     )

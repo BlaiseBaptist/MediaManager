@@ -35,7 +35,7 @@ Queue UI:
 
 Transcode settings:
 
-- Open `/settings/transcoding/` to change the pass/fail matching rule and the worker ffmpeg defaults.
+- Open `/settings/transcoding/` to change the pass/fail matching rule and the worker extra ffmpeg args.
 - Saving the page refreshes stored metadata matches and queue state.
 
 To populate the database from `/Volumes/media`, run:

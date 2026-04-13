@@ -25,24 +25,16 @@ class TranscodeSettingsTests(TestCase):
         )
         MediaMetadata.objects.create(
             media_file=media_file,
-            container_format="AVI",
-            video_codecs=["h264"],
-            audio_codecs=["aac"],
+            container_format="matroska",
+            video_codecs=["av1"],
+            audio_codecs=["opus"],
             subtitle_codecs=[],
-            matches_target_profile=False,
+            matches_target_profile=True,
         )
 
         response = self.client.post(
             reverse("transcode_settings"),
             {
-                "target_container_contains": "avi",
-                "target_video_codecs_text": "h264",
-                "target_audio_codecs_text": "aac",
-                "target_subtitle_codecs_text": "",
-                "transcode_quality": "20",
-                "transcode_video_codec": "libx265",
-                "transcode_audio_codec": "aac",
-                "output_extension": ".mkv",
                 "transcode_ffmpeg_args_text": "-preset\nslow",
             },
         )
@@ -50,10 +42,12 @@ class TranscodeSettingsTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
         profile = TranscodeProfile.load()
-        self.assertEqual(profile.target_container_contains, "avi")
-        self.assertEqual(profile.transcode_quality, "20")
-        self.assertEqual(profile.transcode_video_codec, "libx265")
-        self.assertEqual(profile.output_extension, ".mkv")
+        self.assertEqual(profile.target_container_contains, TranscodeProfile.FIXED_TARGET_CONTAINER_CONTAINS)
+        self.assertEqual(profile.target_video_codecs, TranscodeProfile.FIXED_TARGET_VIDEO_CODECS)
+        self.assertEqual(profile.target_audio_codecs, TranscodeProfile.FIXED_TARGET_AUDIO_CODECS)
+        self.assertEqual(profile.transcode_quality, TranscodeProfile.FIXED_TRANSCODE_QUALITY)
+        self.assertEqual(profile.transcode_video_codec, TranscodeProfile.FIXED_TRANSCODE_VIDEO_CODEC)
+        self.assertEqual(profile.output_extension, TranscodeProfile.FIXED_OUTPUT_EXTENSION)
         self.assertEqual(profile.transcode_ffmpeg_args, ["-preset", "slow"])
 
         media_file.refresh_from_db()

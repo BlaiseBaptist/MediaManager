@@ -1,3 +1,5 @@
+import shlex
+
 from django import forms
 from pathlib import Path
 
@@ -15,6 +17,15 @@ def _split_value_list(value: str) -> list[str]:
 
 def _join_value_list(values: list[str]) -> str:
     return "\n".join(str(value).strip() for value in values if str(value).strip())
+
+
+def _split_ffmpeg_args(value: str) -> list[str]:
+    args: list[str] = []
+    for raw_line in value.splitlines():
+        for token in shlex.split(raw_line):
+            if token and token not in args:
+                args.append(token)
+    return args
 
 
 class TranscodeJobForm(forms.ModelForm):
@@ -74,73 +85,26 @@ class TranscodeJobForm(forms.ModelForm):
 
 
 class TranscodeProfileForm(forms.ModelForm):
-    target_video_codecs_text = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        label="Target video codecs",
-        help_text="Enter one codec per line, or separate with commas.",
-    )
-    target_audio_codecs_text = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        label="Target audio codecs",
-        help_text="Enter one codec per line, or separate with commas.",
-    )
-    target_subtitle_codecs_text = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        label="Target subtitle codecs",
-        help_text="Enter one codec per line, or separate with commas.",
-    )
     transcode_ffmpeg_args_text = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 4}),
         label="FFmpeg args",
-        help_text="Enter one ffmpeg argument per line, in the order they should be appended.",
+        help_text="Enter extra ffmpeg args as tokens. Flags that would override the fixed MKV / AV1 / Opus recipe are ignored.",
     )
 
     class Meta:
         model = TranscodeProfile
-        fields = [
-            "target_container_contains",
-            "transcode_quality",
-            "transcode_video_codec",
-            "transcode_audio_codec",
-            "output_extension",
-        ]
-        widgets = {
-            "target_container_contains": forms.TextInput(attrs={"placeholder": "matroska"}),
-            "transcode_quality": forms.TextInput(attrs={"placeholder": "23"}),
-            "transcode_video_codec": forms.TextInput(attrs={"placeholder": "libx264"}),
-            "transcode_audio_codec": forms.TextInput(attrs={"placeholder": "aac"}),
-            "output_extension": forms.TextInput(attrs={"placeholder": ".mp4"}),
-        }
+        fields = []
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         profile = self.instance
         if profile and profile.pk:
-            self.fields["target_video_codecs_text"].initial = _join_value_list(profile.target_video_codecs)
-            self.fields["target_audio_codecs_text"].initial = _join_value_list(profile.target_audio_codecs)
-            self.fields["target_subtitle_codecs_text"].initial = _join_value_list(profile.target_subtitle_codecs)
             self.fields["transcode_ffmpeg_args_text"].initial = _join_value_list(profile.transcode_ffmpeg_args)
-
-    def clean(self):
-        cleaned_data = super().clean()
-        cleaned_data["target_video_codecs"] = _split_value_list(cleaned_data.get("target_video_codecs_text", ""))
-        cleaned_data["target_audio_codecs"] = _split_value_list(cleaned_data.get("target_audio_codecs_text", ""))
-        cleaned_data["target_subtitle_codecs"] = _split_value_list(cleaned_data.get("target_subtitle_codecs_text", ""))
-        cleaned_data["transcode_ffmpeg_args"] = [
-            value for value in (line.strip() for line in cleaned_data.get("transcode_ffmpeg_args_text", "").splitlines()) if value
-        ]
-        return cleaned_data
 
     def save(self, commit=True):
         profile = super().save(commit=False)
-        profile.target_video_codecs = self.cleaned_data["target_video_codecs"]
-        profile.target_audio_codecs = self.cleaned_data["target_audio_codecs"]
-        profile.target_subtitle_codecs = self.cleaned_data["target_subtitle_codecs"]
-        profile.transcode_ffmpeg_args = self.cleaned_data["transcode_ffmpeg_args"]
+        profile.transcode_ffmpeg_args = _split_ffmpeg_args(self.cleaned_data["transcode_ffmpeg_args_text"])
         if commit:
             profile.save()
         return profile
