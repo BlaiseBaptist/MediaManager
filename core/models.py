@@ -19,13 +19,17 @@ class MediaFile(models.Model):
         FAILED = "failed", "Failed"
         MISSING = "missing", "Missing"
 
-    source = models.ForeignKey(MediaSource, on_delete=models.CASCADE, related_name="media_files")
+    source = models.ForeignKey(
+        MediaSource, on_delete=models.CASCADE, related_name="media_files"
+    )
     absolute_path = models.CharField(max_length=600, unique=True)
     relative_path = models.CharField(max_length=500)
     file_name = models.CharField(max_length=255)
     size_bytes = models.BigIntegerField(default=0)
     modified_at = models.DateTimeField(null=True, blank=True)
-    stage = models.CharField(max_length=32, choices=Stage.choices, default=Stage.DISCOVERED, db_index=True)
+    stage = models.CharField(
+        max_length=32, choices=Stage.choices, default=Stage.DISCOVERED, db_index=True
+    )
     is_present = models.BooleanField(default=True, db_index=True)
     last_seen_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -37,14 +41,21 @@ class MediaFile(models.Model):
     class Meta:
         ordering = ["stage", "source__name", "relative_path"]
         constraints = [
-            models.UniqueConstraint(fields=["source", "relative_path"], name="unique_mediafile_per_source_relative_path"),
+            models.UniqueConstraint(
+                fields=["source", "relative_path"],
+                name="unique_mediafile_per_source_relative_path",
+            ),
         ]
 
 
 class MediaMetadata(models.Model):
-    media_file = models.OneToOneField(MediaFile, on_delete=models.CASCADE, related_name="metadata_record")
+    media_file = models.OneToOneField(
+        MediaFile, on_delete=models.CASCADE, related_name="metadata_record"
+    )
     container_format = models.CharField(max_length=120, blank=True, default="")
-    duration_seconds = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    duration_seconds = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True
+    )
     bitrate = models.BigIntegerField(null=True, blank=True)
     video_codecs = models.JSONField(default=list, blank=True)
     audio_codecs = models.JSONField(default=list, blank=True)
@@ -70,15 +81,25 @@ class TranscodeProfile(models.Model):
     FIXED_TARGET_AUDIO_CODECS = ["opus"]
     FIXED_TARGET_SUBTITLE_CODECS: list[str] = []
 
-    target_container_contains = models.CharField(max_length=120, blank=True, default=FIXED_TARGET_CONTAINER_CONTAINS)
+    target_container_contains = models.CharField(
+        max_length=120, blank=True, default=FIXED_TARGET_CONTAINER_CONTAINS
+    )
     target_video_codecs = models.JSONField(default=list, blank=True)
     target_audio_codecs = models.JSONField(default=list, blank=True)
     target_subtitle_codecs = models.JSONField(default=list, blank=True)
-    transcode_quality = models.CharField(max_length=32, blank=True, default=FIXED_TRANSCODE_QUALITY)
-    transcode_video_codec = models.CharField(max_length=120, blank=True, default=FIXED_TRANSCODE_VIDEO_CODEC)
-    transcode_audio_codec = models.CharField(max_length=120, blank=True, default=FIXED_TRANSCODE_AUDIO_CODEC)
+    transcode_quality = models.CharField(
+        max_length=32, blank=True, default=FIXED_TRANSCODE_QUALITY
+    )
+    transcode_video_codec = models.CharField(
+        max_length=120, blank=True, default=FIXED_TRANSCODE_VIDEO_CODEC
+    )
+    transcode_audio_codec = models.CharField(
+        max_length=120, blank=True, default=FIXED_TRANSCODE_AUDIO_CODEC
+    )
     transcode_ffmpeg_args = models.JSONField(default=list, blank=True)
-    output_extension = models.CharField(max_length=16, blank=True, default=FIXED_OUTPUT_EXTENSION)
+    output_extension = models.CharField(
+        max_length=16, blank=True, default=FIXED_OUTPUT_EXTENSION
+    )
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -115,13 +136,19 @@ class TranscodeJob(models.Model):
         COMPLETE = "complete", "Complete"
         FAILED = "failed", "Failed"
 
-    source = models.ForeignKey(MediaSource, on_delete=models.CASCADE, related_name="jobs")
-    media_file = models.ForeignKey(MediaFile, on_delete=models.CASCADE, related_name="jobs", null=True, blank=True)
+    source = models.ForeignKey(
+        MediaSource, on_delete=models.CASCADE, related_name="jobs"
+    )
+    media_file = models.ForeignKey(
+        MediaFile, on_delete=models.CASCADE, related_name="jobs", null=True, blank=True
+    )
     input_path = models.CharField(max_length=500, default="")
     command = models.TextField(default="")
     priority = models.PositiveSmallIntegerField(default=100, db_index=True)
     auto_generated = models.BooleanField(default=False, db_index=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     error_message = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

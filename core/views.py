@@ -4,8 +4,13 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import TranscodeJobForm, TranscodeProfileForm
-from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, refresh_target_profile_matches, sync_media_library
+from .forms import TranscodeProfileForm
+from .library_sync import (
+    LIBRARY_ROOT,
+    media_stage_for_job_status,
+    refresh_target_profile_matches,
+    sync_media_library,
+)
 from .models import MediaFile, MediaSource, TranscodeJob, TranscodeProfile
 
 
@@ -18,9 +23,15 @@ def home(request):
         "source_count": MediaSource.objects.count(),
         "media_file_count": MediaFile.objects.count(),
         "job_count": TranscodeJob.objects.count(),
-        "pending_job_count": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING).count(),
-        "ready_media_count": MediaFile.objects.filter(stage=MediaFile.Stage.READY).count(),
-        "transcode_pending_count": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODE_PENDING).count(),
+        "pending_job_count": TranscodeJob.objects.filter(
+            status=TranscodeJob.Status.PENDING
+        ).count(),
+        "ready_media_count": MediaFile.objects.filter(
+            stage=MediaFile.Stage.READY
+        ).count(),
+        "transcode_pending_count": MediaFile.objects.filter(
+            stage=MediaFile.Stage.TRANSCODE_PENDING
+        ).count(),
     }
     return render(request, "core/home.html", context)
 
@@ -46,9 +57,15 @@ def media_inventory(request):
         "query_string": query.urlencode(),
         "counts": {
             "total": MediaFile.objects.count(),
-            "discovered": MediaFile.objects.filter(stage=MediaFile.Stage.DISCOVERED).count(),
-            "transcode_pending": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODE_PENDING).count(),
-            "transcoding": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODING).count(),
+            "discovered": MediaFile.objects.filter(
+                stage=MediaFile.Stage.DISCOVERED
+            ).count(),
+            "transcode_pending": MediaFile.objects.filter(
+                stage=MediaFile.Stage.TRANSCODE_PENDING
+            ).count(),
+            "transcoding": MediaFile.objects.filter(
+                stage=MediaFile.Stage.TRANSCODING
+            ).count(),
             "ready": MediaFile.objects.filter(stage=MediaFile.Stage.READY).count(),
             "failed": MediaFile.objects.filter(stage=MediaFile.Stage.FAILED).count(),
             "missing": MediaFile.objects.filter(stage=MediaFile.Stage.MISSING).count(),
@@ -79,7 +96,10 @@ def transcode_settings(request):
         if form.is_valid():
             form.save()
             refresh_target_profile_matches()
-            messages.success(request, "Transcode settings saved and library classification refreshed.")
+            messages.success(
+                request,
+                "Transcode settings saved and library classification refreshed.",
+            )
             return redirect("transcode_settings")
     else:
         form = TranscodeProfileForm(instance=profile)
@@ -95,15 +115,18 @@ def transcode_settings(request):
 
 
 def queue(request):
-    if request.method == "POST":
-        form = TranscodeJobForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return _queue_redirect(request)
-    else:
-        form = TranscodeJobForm()
-
-    jobs = TranscodeJob.objects.select_related("source", "media_file", "media_file__metadata_record").all()
+    print(request)
+    # if request.method == "POST":
+    #     form = TranscodeJobForm(request.POST)
+    #     if form.is_valid():
+    #         form.save()
+    #         return _queue_redirect(request)
+    # else:
+    #     form = TranscodeJobForm()
+    form = TranscodeProfileForm
+    jobs = TranscodeJob.objects.select_related(
+        "source", "media_file", "media_file__metadata_record"
+    ).all()
     status_filter = request.GET.get("status", "").strip()
     source_filter = request.GET.get("source", "").strip()
     auto_generated_filter = request.GET.get("auto_generated", "").strip()

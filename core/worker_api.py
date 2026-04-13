@@ -1,4 +1,5 @@
 import json
+from urllib.parse import quote, urljoin
 from pathlib import Path
 
 from django.conf import settings
@@ -57,6 +58,26 @@ def _job_filename(job: TranscodeJob) -> str:
     return candidate or "input.bin"
 
 
+def _job_input_url(request, job: TranscodeJob) -> str:
+    file_base_url = getattr(settings, "MEDIA_MANAGER_FILE_BASE_URL", None)
+    if file_base_url:
+        source_path = (
+            job.media_file.absolute_path if job.media_file_id else job.input_path
+        )
+        try:
+            relative_path = (
+                Path(source_path).resolve().relative_to(Path("/media").resolve())
+            )
+        except ValueError:
+            return request.build_absolute_uri(
+                reverse("worker_job_input", args=[job.id])
+            )
+        base = file_base_url.rstrip("/") + "/"
+        return urljoin(base, quote(str(relative_path).replace("\\", "/")))
+
+    return request.build_absolute_uri(reverse("worker_job_input", args=[job.id]))
+
+
 def _delivery_filename(job: TranscodeJob) -> str:
     if job.media_file_id and job.media_file.file_name:
         extension = _delivery_extension()
@@ -103,7 +124,7 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
     profile = TranscodeProfile.load()
     payload = {
         "id": str(job.id),
-        "input_url": request.build_absolute_uri(reverse("worker_job_input", args=[job.id])),
+        "input_url": _job_input_url(request, job),
         "filename": _job_filename(job),
     }
     payload["transcode"] = {
@@ -113,7 +134,9 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
         "ffmpeg_args": _sanitize_ffmpeg_args(profile.transcode_ffmpeg_args),
     }
     payload["delivery"] = {
-        "output_url": request.build_absolute_uri(reverse("worker_job_output", args=[job.id])),
+        "output_url": request.build_absolute_uri(
+            reverse("worker_job_output", args=[job.id])
+        ),
         "filename": _delivery_filename(job),
     }
     return payload
@@ -129,9 +152,10 @@ def _claim_next_job() -> TranscodeJob | None:
     if candidate is None:
         return None
 
-    updated = (
-        TranscodeJob.objects.filter(pk=candidate.pk, status=TranscodeJob.Status.PENDING)
-        .update(status=TranscodeJob.Status.RUNNING, error_message="", updated_at=timezone.now())
+    updated = TranscodeJob.objects.filter(
+        pk=candidate.pk, status=TranscodeJob.Status.PENDING
+    ).update(
+        status=TranscodeJob.Status.RUNNING, error_message="", updated_at=timezone.now()
     )
     if not updated:
         return None
@@ -166,7 +190,9 @@ def worker_job_input(request, job_id: int):
     if auth_error is not None:
         return auth_error
 
-    job = get_object_or_404(TranscodeJob.objects.select_related("media_file"), pk=job_id)
+    job = get_object_or_404(
+        TranscodeJob.objects.select_related("media_file"), pk=job_id
+    )
     source_path = job.media_file.absolute_path if job.media_file_id else job.input_path
     file_path = Path(source_path)
     if not file_path.is_file():
@@ -184,7 +210,9 @@ def worker_complete_job(request, job_id: int):
         return auth_error
 
     _request_json(request)
-    job = get_object_or_404(TranscodeJob.objects.select_related("media_file"), pk=job_id)
+    job = get_object_or_404(
+        TranscodeJob.objects.select_related("media_file"), pk=job_id
+    )
     job.status = TranscodeJob.Status.COMPLETE
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
@@ -203,9 +231,13 @@ def worker_failed_job(request, job_id: int):
         return auth_error
 
     payload = _request_json(request)
-    job = get_object_or_404(TranscodeJob.objects.select_related("media_file"), pk=job_id)
+    job = get_object_or_404(
+        TranscodeJob.objects.select_related("media_file"), pk=job_id
+    )
     job.status = TranscodeJob.Status.FAILED
-    job.error_message = str(payload.get("error", "")) if payload.get("error") is not None else ""
+    job.error_message = (
+        str(payload.get("error", "")) if payload.get("error") is not None else ""
+    )
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:
         job.media_file.stage = MediaFile.Stage.FAILED

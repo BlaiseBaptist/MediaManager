@@ -10,11 +10,27 @@ from pathlib import Path
 
 from django.utils import timezone
 
-from .models import MediaFile, MediaMetadata, MediaSource, TranscodeJob, TranscodeProfile
+from .models import (
+    MediaFile,
+    MediaMetadata,
+    MediaSource,
+    TranscodeJob,
+    TranscodeProfile,
+)
 
 LIBRARY_ROOT = Path("/media").resolve()
 SCAN_ROOTS = ("movie", "shows")
-MEDIA_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".mpg", ".mpeg"}
+MEDIA_EXTENSIONS = {
+    ".mkv",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".m4v",
+    ".webm",
+    ".ts",
+    ".mpg",
+    ".mpeg",
+}
 
 
 @dataclass
@@ -58,7 +74,9 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
     source = _media_source_for(source_path)
     relative_path = str(file_path.relative_to(source_path))
     stat = file_path.stat()
-    modified_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.get_current_timezone())
+    modified_at = datetime.fromtimestamp(
+        stat.st_mtime, tz=timezone.get_current_timezone()
+    )
 
     media_file, created = MediaFile.objects.get_or_create(
         source=source,
@@ -162,7 +180,9 @@ def _resolve_auto_generated_jobs(media_file: MediaFile, status: str) -> None:
 
 def _format_name(probe_data: dict) -> str:
     format_data = probe_data.get("format", {})
-    return (format_data.get("format_name") or format_data.get("format_long_name") or "").strip()
+    return (
+        format_data.get("format_name") or format_data.get("format_long_name") or ""
+    ).strip()
 
 
 def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
@@ -170,7 +190,11 @@ def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
     for stream in probe_data.get("streams", []):
         if stream.get("codec_type") != codec_type:
             continue
-        codec_name = (stream.get("codec_name") or stream.get("codec_long_name") or "").strip().lower()
+        codec_name = (
+            (stream.get("codec_name") or stream.get("codec_long_name") or "")
+            .strip()
+            .lower()
+        )
         if codec_name and codec_name not in codecs:
             codecs.append(codec_name)
     return codecs
@@ -178,34 +202,76 @@ def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
 
 def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool:
     format_name = _format_name(probe_data).lower()
-    container_requirement = (profile.target_container_contains or TranscodeProfile.FIXED_TARGET_CONTAINER_CONTAINS).strip().lower()
+    container_requirement = (
+        (
+            profile.target_container_contains
+            or TranscodeProfile.FIXED_TARGET_CONTAINER_CONTAINS
+        )
+        .strip()
+        .lower()
+    )
     container_ok = container_requirement in format_name
     video_codecs = _stream_codecs(probe_data, "video")
     audio_codecs = _stream_codecs(probe_data, "audio")
     subtitle_codecs = _stream_codecs(probe_data, "subtitle")
 
-    target_video_codecs = [codec.strip().lower() for codec in (profile.target_video_codecs or TranscodeProfile.FIXED_TARGET_VIDEO_CODECS) if str(codec).strip()]
-    target_audio_codecs = [codec.strip().lower() for codec in (profile.target_audio_codecs or TranscodeProfile.FIXED_TARGET_AUDIO_CODECS) if str(codec).strip()]
-    target_subtitle_codecs = [codec.strip().lower() for codec in (profile.target_subtitle_codecs or TranscodeProfile.FIXED_TARGET_SUBTITLE_CODECS) if str(codec).strip()]
+    target_video_codecs = [
+        codec.strip().lower()
+        for codec in (
+            profile.target_video_codecs or TranscodeProfile.FIXED_TARGET_VIDEO_CODECS
+        )
+        if str(codec).strip()
+    ]
+    target_audio_codecs = [
+        codec.strip().lower()
+        for codec in (
+            profile.target_audio_codecs or TranscodeProfile.FIXED_TARGET_AUDIO_CODECS
+        )
+        if str(codec).strip()
+    ]
+    target_subtitle_codecs = [
+        codec.strip().lower()
+        for codec in (
+            profile.target_subtitle_codecs
+            or TranscodeProfile.FIXED_TARGET_SUBTITLE_CODECS
+        )
+        if str(codec).strip()
+    ]
 
-    video_ok = bool(video_codecs) and all(codec in target_video_codecs for codec in video_codecs)
-    audio_ok = bool(audio_codecs) and all(codec in target_audio_codecs for codec in audio_codecs)
+    video_ok = bool(video_codecs) and all(
+        codec in target_video_codecs for codec in video_codecs
+    )
+    audio_ok = bool(audio_codecs) and all(
+        codec in target_audio_codecs for codec in audio_codecs
+    )
     subtitle_ok = not target_subtitle_codecs or (
-        bool(subtitle_codecs) and all(codec in target_subtitle_codecs for codec in subtitle_codecs)
+        bool(subtitle_codecs)
+        and all(codec in target_subtitle_codecs for codec in subtitle_codecs)
     )
     return container_ok and video_ok and audio_ok and subtitle_ok
 
 
-def _metadata_matches_target_profile(metadata: MediaMetadata, profile: TranscodeProfile) -> bool:
+def _metadata_matches_target_profile(
+    metadata: MediaMetadata, profile: TranscodeProfile
+) -> bool:
     probe_data = {
         "format": {
             "format_name": metadata.container_format,
             "format_long_name": metadata.container_format,
         },
         "streams": [
-            *[{"codec_type": "video", "codec_name": codec} for codec in (metadata.video_codecs or [])],
-            *[{"codec_type": "audio", "codec_name": codec} for codec in (metadata.audio_codecs or [])],
-            *[{"codec_type": "subtitle", "codec_name": codec} for codec in (metadata.subtitle_codecs or [])],
+            *[
+                {"codec_type": "video", "codec_name": codec}
+                for codec in (metadata.video_codecs or [])
+            ],
+            *[
+                {"codec_type": "audio", "codec_name": codec}
+                for codec in (metadata.audio_codecs or [])
+            ],
+            *[
+                {"codec_type": "subtitle", "codec_name": codec}
+                for codec in (metadata.subtitle_codecs or [])
+            ],
         ],
     }
     return _matches_target_profile(probe_data, profile)
@@ -231,7 +297,9 @@ def sync_media_library() -> ScanStats:
             should_probe = created or changed or metadata is None
             try:
                 if should_probe:
-                    metadata = collect_metadata_for_media_file(media_file, profile=profile)
+                    metadata = collect_metadata_for_media_file(
+                        media_file, profile=profile
+                    )
             except FileNotFoundError as exc:
                 media_file.stage = MediaFile.Stage.FAILED
                 media_file.save(update_fields=["stage", "updated_at"])
@@ -253,7 +321,11 @@ def sync_media_library() -> ScanStats:
                     stats.updated += 1
                 continue
 
-            media_file.stage = MediaFile.Stage.READY if metadata.matches_target_profile else MediaFile.Stage.TRANSCODE_PENDING
+            media_file.stage = (
+                MediaFile.Stage.READY
+                if metadata.matches_target_profile
+                else MediaFile.Stage.TRANSCODE_PENDING
+            )
             media_file.save(update_fields=["stage", "updated_at"])
             if media_file.stage == MediaFile.Stage.TRANSCODE_PENDING:
                 _upsert_transcode_job(media_file)
@@ -316,12 +388,16 @@ def _decimal_or_none(value: str | int | float | None) -> Decimal | None:
         return None
 
 
-def collect_metadata_for_media_file(media_file: MediaFile, profile: TranscodeProfile | None = None) -> MediaMetadata:
+def collect_metadata_for_media_file(
+    media_file: MediaFile, profile: TranscodeProfile | None = None
+) -> MediaMetadata:
     profile = profile or TranscodeProfile.load()
     file_path = Path(media_file.absolute_path)
     probe_data = _probe_media_file(file_path)
     format_data = probe_data.get("format", {})
-    container_format = format_data.get("format_long_name") or format_data.get("format_name") or ""
+    container_format = (
+        format_data.get("format_long_name") or format_data.get("format_name") or ""
+    )
     metadata, _ = MediaMetadata.objects.get_or_create(media_file=media_file)
     metadata.container_format = container_format
     metadata.duration_seconds = _decimal_or_none(format_data.get("duration"))
@@ -349,14 +425,22 @@ def media_stage_for_job_status(status: str) -> str:
 
 def refresh_target_profile_matches() -> None:
     profile = TranscodeProfile.load()
-    for media_file in MediaFile.objects.filter(metadata_record__isnull=False).select_related("metadata_record"):
+    for media_file in MediaFile.objects.filter(
+        metadata_record__isnull=False
+    ).select_related("metadata_record"):
         try:
             metadata = media_file.metadata_record
         except MediaMetadata.DoesNotExist:
             continue
-        metadata.matches_target_profile = _metadata_matches_target_profile(metadata, profile)
+        metadata.matches_target_profile = _metadata_matches_target_profile(
+            metadata, profile
+        )
         metadata.save(update_fields=["matches_target_profile", "updated_at"])
-        media_file.stage = MediaFile.Stage.READY if metadata.matches_target_profile else MediaFile.Stage.TRANSCODE_PENDING
+        media_file.stage = (
+            MediaFile.Stage.READY
+            if metadata.matches_target_profile
+            else MediaFile.Stage.TRANSCODE_PENDING
+        )
         media_file.save(update_fields=["stage", "updated_at"])
         if media_file.stage == MediaFile.Stage.TRANSCODE_PENDING:
             _upsert_transcode_job(media_file)
