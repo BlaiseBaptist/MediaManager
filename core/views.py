@@ -1,8 +1,9 @@
+from django.contrib import messages
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import TranscodeJobForm
-from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, sync_media_library
+from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, process_pending_metadata, sync_media_library
 from .models import MediaFile, MediaSource, TranscodeJob
 
 
@@ -50,7 +51,21 @@ def media_inventory(request):
 
 def scan_library(request):
     if request.method == "POST":
-        sync_media_library()
+        stats = sync_media_library()
+        messages.success(
+            request,
+            f"Scan complete: {stats.scanned} files scanned, {stats.created} created, {stats.updated} updated, {stats.missing} marked missing.",
+        )
+    return redirect("media_inventory")
+
+
+def process_library_metadata(request):
+    if request.method == "POST":
+        stats = process_pending_metadata()
+        messages.success(
+            request,
+            f"Metadata worker complete: {stats.processed} files processed, {stats.ready} ready, {stats.failed} failed.",
+        )
     return redirect("media_inventory")
 
 

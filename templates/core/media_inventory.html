@@ -72,6 +72,9 @@
         flex-wrap: wrap;
         margin-bottom: 16px;
       }
+      .toolbar form {
+        margin: 0;
+      }
       .button, button {
         border: 0;
         border-radius: 999px;
@@ -151,6 +154,28 @@
         color: var(--muted);
         padding: 12px 0 0;
       }
+      .messages {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .message {
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #f8fafc;
+        color: var(--text);
+      }
+      .message.success {
+        border-color: #86efac;
+        background: #ecfdf3;
+        color: #166534;
+      }
+      .message.error {
+        border-color: #fca5a5;
+        background: #fef2f2;
+        color: #991b1b;
+      }
       @media (max-width: 960px) {
         table, thead, tbody, th, td, tr { display: block; }
         thead { display: none; }
@@ -174,10 +199,21 @@
           <h2>Inventory</h2>
         </header>
         <div class="body">
+          {% if messages %}
+            <div class="messages">
+              {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
           <div class="toolbar">
             <form method="post" action="{% url 'scan_library' %}">
               {% csrf_token %}
               <button type="submit">Rescan Library</button>
+            </form>
+            <form method="post" action="{% url 'process_library_metadata' %}">
+              {% csrf_token %}
+              <button class="good" type="submit">Process Metadata</button>
             </form>
             <a class="button secondary" href="{% url 'media_inventory' %}">All</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=discovered">Discovered</a>
