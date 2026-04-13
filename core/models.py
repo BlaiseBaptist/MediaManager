@@ -72,6 +72,7 @@ class TranscodeJob(models.Model):
     input_path = models.CharField(max_length=500, default="")
     command = models.TextField(default="")
     priority = models.PositiveSmallIntegerField(default=100, db_index=True)
+    auto_generated = models.BooleanField(default=False, db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     error_message = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
