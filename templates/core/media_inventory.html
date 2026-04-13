@@ -154,6 +154,19 @@
         color: var(--muted);
         padding: 12px 0 0;
       }
+      .pager {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      .pager .page-info {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
       .messages {
         display: grid;
         gap: 10px;
@@ -280,6 +293,22 @@
             </table>
           {% else %}
             <div class="empty">No media files are indexed yet. Run a rescan to populate the database.</div>
+          {% endif %}
+
+          {% if page_obj.paginator.num_pages > 1 %}
+            <div class="pager">
+              <div class="page-info">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+              </div>
+              <div class="toolbar" style="margin: 0;">
+                {% if page_obj.has_previous %}
+                  <a class="button secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                  <a class="button secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                {% endif %}
+              </div>
+            </div>
           {% endif %}
         </div>
       </section>

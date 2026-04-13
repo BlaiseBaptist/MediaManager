@@ -211,6 +211,19 @@
         margin-top: 10px;
         font-weight: 600;
       }
+      .pager {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      .pager .page-info {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
       @media (max-width: 980px) {
         .grid { grid-template-columns: 1fr; }
       }
@@ -370,6 +383,21 @@
                 <p>No jobs yet. Add one on the left.</p>
               {% endfor %}
             </div>
+            {% if page_obj.paginator.num_pages > 1 %}
+              <div class="pager">
+                <div class="page-info">
+                  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </div>
+                <div class="actions">
+                  {% if page_obj.has_previous %}
+                    <a class="action-link secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                  {% endif %}
+                  {% if page_obj.has_next %}
+                    <a class="action-link secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
           </div>
         </section>
       </div>

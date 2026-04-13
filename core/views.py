@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -33,10 +34,16 @@ def media_inventory(request):
     files = MediaFile.objects.select_related("source", "metadata_record").all()
     if stage and stage in MediaFile.Stage.values:
         files = files.filter(stage=stage)
+    paginator = Paginator(files, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    query = request.GET.copy()
+    query.pop("page", None)
 
     context = {
         "library_root": LIBRARY_ROOT,
-        "media_files": files,
+        "media_files": page_obj,
+        "page_obj": page_obj,
+        "query_string": query.urlencode(),
         "counts": {
             "total": MediaFile.objects.count(),
             "discovered": MediaFile.objects.filter(stage=MediaFile.Stage.DISCOVERED).count(),
@@ -86,18 +93,24 @@ def queue(request):
     if auto_generated_filter in {"0", "1"}:
         jobs = jobs.filter(auto_generated=auto_generated_filter == "1")
 
+    query = request.GET.copy()
+    query.pop("page", None)
+    paginator = Paginator(jobs, 30)
+    page_obj = paginator.get_page(request.GET.get("page"))
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 
     context = {
         "form": form,
-        "jobs": jobs,
+        "jobs": page_obj,
+        "page_obj": page_obj,
         "status_counts": status_counts,
         "filters": {
             "status": status_filter,
             "source": source_filter,
             "auto_generated": auto_generated_filter,
         },
+        "query_string": query.urlencode(),
         "sources": MediaSource.objects.order_by("name"),
         "pending_jobs": jobs.filter(status=TranscodeJob.Status.PENDING),
         "running_jobs": jobs.filter(status=TranscodeJob.Status.RUNNING),
