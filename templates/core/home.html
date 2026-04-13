@@ -41,6 +41,15 @@
         color: var(--muted);
         line-height: 1.6;
       }
+      a.button {
+        display: inline-block;
+        padding: 12px 16px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        text-decoration: none;
+        font-weight: 600;
+      }
       .stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -73,6 +82,7 @@
           A Django base for tracking local media, deciding whether files need
           transcoding, and queueing work for local or remote execution.
         </p>
+        <p><a class="button" href="{% url 'queue' %}">Open Queue</a></p>
         <div class="stats">
           <div class="stat">
             <strong>{{ source_count }}</strong>
@@ -91,4 +101,3 @@
     </main>
   </body>
 </html>
-

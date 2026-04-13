@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Queue - Media Manager</title>
+    <style>
+      :root {
+        --bg: #eef2f7;
+        --panel: #ffffff;
+        --text: #16202a;
+        --muted: #667085;
+        --accent: #0f766e;
+        --accent-2: #1d4ed8;
+        --danger: #b42318;
+        --line: #d8e0ea;
+        --soft: #f7fafc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #f7f9fc 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .topbar a {
+        color: var(--accent-2);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 20px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+      }
+      .card header {
+        padding: 18px 20px 0;
+      }
+      .card h1, .card h2 {
+        margin: 0;
+      }
+      .card .body {
+        padding: 20px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .stat {
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .stat strong {
+        display: block;
+        font-size: 1.7rem;
+        color: var(--accent);
+      }
+      form label {
+        display: block;
+        font-weight: 600;
+        margin: 14px 0 6px;
+      }
+      form input, form textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font: inherit;
+        background: white;
+      }
+      .helptext, .errorlist {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      .errorlist {
+        color: var(--danger);
+        padding-left: 18px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+      }
+      button, .action-link {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        color: white;
+        background: var(--accent);
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .action-link.secondary, button.secondary {
+        background: #475467;
+      }
+      .action-link.danger, button.danger {
+        background: var(--danger);
+      }
+      .queue {
+        display: grid;
+        gap: 14px;
+      }
+      .job {
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fff;
+      }
+      .job-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: baseline;
+      }
+      .job h3 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.94rem;
+        margin-top: 6px;
+      }
+      .command {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #0b1020;
+        color: #dbe4ff;
+        overflow-x: auto;
+        white-space: pre-wrap;
+      }
+      .pill {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: #e4e7ec;
+        color: #344054;
+      }
+      .pill.pending { background: #fff7ed; color: #9a3412; }
+      .pill.running { background: #eff6ff; color: #1d4ed8; }
+      .pill.complete { background: #ecfdf3; color: #027a48; }
+      .pill.failed { background: #fef3f2; color: #b42318; }
+      .job-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .job-actions form {
+        margin: 0;
+      }
+      .job-actions a, .job-actions button {
+        font-size: 0.9rem;
+        padding: 8px 12px;
+      }
+      .error {
+        color: var(--danger);
+        margin-top: 10px;
+        font-weight: 600;
+      }
+      @media (max-width: 980px) {
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>Queue</h1>
+          <div class="meta">Track jobs from the browser and update their state as work moves.</div>
+        </div>
+        <a href="{% url 'home' %}">Back home</a>
+      </div>
+      <div class="grid">
+        <section class="card">
+          <header>
+            <h2>Enqueue job</h2>
+          </header>
+          <div class="body">
+            <div class="stats">
+              <div class="stat"><strong>{{ pending_jobs|length }}</strong><div class="meta">Pending</div></div>
+              <div class="stat"><strong>{{ running_jobs|length }}</strong><div class="meta">Running</div></div>
+              <div class="stat"><strong>{{ complete_jobs|length }}</strong><div class="meta">Complete</div></div>
+              <div class="stat"><strong>{{ failed_jobs|length }}</strong><div class="meta">Failed</div></div>
+            </div>
+            <form method="post">
+              {% csrf_token %}
+              {{ form.non_field_errors }}
+              <label for="{{ form.source_name.id_for_label }}">Source name</label>
+              {{ form.source_name }}
+              {{ form.source_name.errors }}
+              <label for="{{ form.source_path.id_for_label }}">Source path</label>
+              {{ form.source_path }}
+              {{ form.source_path.errors }}
+              <label for="{{ form.input_path.id_for_label }}">Input file</label>
+              {{ form.input_path }}
+              {{ form.input_path.errors }}
+              <label for="{{ form.command.id_for_label }}">Command</label>
+              {{ form.command }}
+              {{ form.command.errors }}
+              <label for="{{ form.priority.id_for_label }}">Priority</label>
+              {{ form.priority }}
+              {{ form.priority.errors }}
+              <div class="actions">
+                <button type="submit">Add to queue</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <header>
+            <h2>Jobs</h2>
+          </header>
+          <div class="body">
+            <div class="queue">
+              {% for job in jobs %}
+                <article class="job">
+                  <div class="job-head">
+                    <h3>{{ job.source.name }}: {{ job.input_path }}</h3>
+                    <span class="pill {{ job.status }}">{{ job.get_status_display }}</span>
+                  </div>
+                  <div class="meta">
+                    Source: {{ job.source.path }} · Priority: {{ job.priority }} · Created: {{ job.created_at }}
+                  </div>
+                  <div class="command">{{ job.command }}</div>
+                  {% if job.error_message %}
+                    <div class="error">{{ job.error_message }}</div>
+                  {% endif %}
+                  <div class="job-actions">
+                    <form method="post" action="{% url 'update_job_status' job.id 'pending' %}">
+                      {% csrf_token %}
+                      <button class="secondary" type="submit">Pending</button>
+                    </form>
+                    <form method="post" action="{% url 'update_job_status' job.id 'running' %}">
+                      {% csrf_token %}
+                      <button class="secondary" type="submit">Running</button>
+                    </form>
+                    <form method="post" action="{% url 'update_job_status' job.id 'complete' %}">
+                      {% csrf_token %}
+                      <button type="submit">Complete</button>
+                    </form>
+                    <form method="post" action="{% url 'update_job_status' job.id 'failed' %}">
+                      {% csrf_token %}
+                      <button class="danger" type="submit">Fail</button>
+                    </form>
+                    <form method="post" action="{% url 'delete_job' job.id %}">
+                      {% csrf_token %}
+                      <button class="danger" type="submit">Delete</button>
+                    </form>
+                  </div>
+                </article>
+              {% empty %}
+                <p>No jobs yet. Add one on the left.</p>
+              {% endfor %}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

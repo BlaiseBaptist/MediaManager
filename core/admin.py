@@ -11,6 +11,7 @@ class MediaSourceAdmin(admin.ModelAdmin):
 
 @admin.register(TranscodeJob)
 class TranscodeJobAdmin(admin.ModelAdmin):
-    list_display = ("source", "status", "created_at", "updated_at")
-    list_filter = ("status",)
-    search_fields = ("source__name", "command")
+    list_display = ("source", "input_path", "priority", "status", "created_at", "updated_at")
+    list_filter = ("status", "priority")
+    search_fields = ("source__name", "source__path", "input_path", "command", "error_message")
+    ordering = ("status", "priority", "-created_at")
