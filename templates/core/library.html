@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Library - Media Manager</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-2: #0b1220;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #22c55e;
+        --line: rgba(148, 163, 184, 0.18);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 28%),
+          radial-gradient(circle at top right, rgba(34, 197, 94, 0.10), transparent 25%),
+          linear-gradient(180deg, #0f172a 0%, #020617 100%);
+        color: var(--text);
+      }
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 700;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 18px;
+      }
+      .card {
+        background: rgba(17, 24, 39, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        backdrop-filter: blur(14px);
+      }
+      .card header, .card .body {
+        padding: 18px 20px;
+      }
+      .breadcrumb {
+        color: var(--muted);
+        font-size: 0.95rem;
+        word-break: break-all;
+      }
+      .side-nav {
+        display: grid;
+        gap: 10px;
+      }
+      .side-link {
+        display: block;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel-2);
+        color: var(--text);
+      }
+      .side-link span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.84rem;
+        margin-top: 4px;
+      }
+      .entries {
+        display: grid;
+        gap: 10px;
+      }
+      .entry {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 14px;
+        align-items: center;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.55);
+      }
+      .entry strong {
+        display: block;
+        font-size: 0.98rem;
+      }
+      .entry .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 4px;
+      }
+      .tag {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.16);
+        color: #7dd3fc;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .tag.file {
+        background: rgba(34, 197, 94, 0.16);
+        color: #86efac;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 18px 2px 4px;
+      }
+      @media (max-width: 960px) {
+        .shell { grid-template-columns: 1fr; }
+        .entry { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>Library Browser</h1>
+          <div class="breadcrumb">
+            Root: {{ library_root }}{% if current_relative %} / {{ current_relative }}{% endif %}
+          </div>
+        </div>
+        <a href="{% url 'home' %}">Back home</a>
+      </div>
+
+      <div class="shell">
+        <aside class="card">
+          <header>
+            <h2>Quick Links</h2>
+          </header>
+          <div class="body side-nav">
+            <a class="side-link" href="{% url 'library' %}">
+              Library root
+              <span>All media folders</span>
+            </a>
+            <a class="side-link" href="{% url 'library' %}?path=movie">
+              Movies
+              <span>/Volumes/media/movie</span>
+            </a>
+            <a class="side-link" href="{% url 'library' %}?path=shows">
+              Shows
+              <span>/Volumes/media/shows</span>
+            </a>
+            <a class="side-link" href="{% url 'library' %}?path=transcode_cache">
+              Cache
+              <span>/Volumes/media/transcode_cache</span>
+            </a>
+          </div>
+        </aside>
+
+        <section class="card">
+          <header>
+            <h2>Contents</h2>
+          </header>
+          <div class="body">
+            {% if parent_relative is not None %}
+              <div style="margin-bottom: 16px;">
+                <a href="{% url 'library' %}?path={{ parent_relative }}">Up one level</a>
+              </div>
+            {% endif %}
+
+            {% if not path_exists %}
+              <div class="empty">The selected path does not exist.</div>
+            {% else %}
+              <div class="entries">
+                {% for entry in entries %}
+                  <div class="entry">
+                    <div>
+                      {% if entry.is_dir %}
+                        <strong>
+                          <a href="{% url 'library' %}?path={{ entry.path|urlencode }}">{{ entry.name }}</a>
+                          <span class="tag">Folder</span>
+                        </strong>
+                      {% else %}
+                        <strong>{{ entry.name }} <span class="tag file">File</span></strong>
+                      {% endif %}
+                      <div class="meta">{{ entry.path }}</div>
+                    </div>
+                    <div class="meta">{{ entry.size }}</div>
+                    <div class="meta">{{ entry.modified|date:"Y-m-d H:i" }}</div>
+                  </div>
+                {% empty %}
+                  <div class="empty">This folder is empty.</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

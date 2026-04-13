@@ -20,6 +20,7 @@ pipenv run python manage.py runserver
 ```
 
 Open `http://127.0.0.1:8000/` for the landing page and `http://127.0.0.1:8000/queue/` for the queue UI.
+Browse the media library at `http://127.0.0.1:8000/library/`.
 
 ## Next steps
 

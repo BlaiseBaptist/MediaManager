@@ -1,8 +1,30 @@
+from pathlib import Path
+from datetime import datetime
+
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import TranscodeJobForm
 from .models import MediaSource, TranscodeJob
+
+LIBRARY_ROOT = Path("/Volumes/media").resolve()
+
+
+def _safe_library_path(relative_path: str | None) -> Path:
+    candidate = (LIBRARY_ROOT / (relative_path or "")).resolve()
+    if candidate == LIBRARY_ROOT or LIBRARY_ROOT in candidate.parents:
+        return candidate
+    return LIBRARY_ROOT
+
+
+def _format_size(num_bytes: int) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size = float(num_bytes)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
+        size /= 1024
+    return f"{num_bytes} B"
 
 
 def home(request):
@@ -12,6 +34,39 @@ def home(request):
         "pending_job_count": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING).count(),
     }
     return render(request, "core/home.html", context)
+
+
+def library(request):
+    relative_path = request.GET.get("path", "")
+    current_path = _safe_library_path(relative_path)
+
+    entries = []
+    if current_path.exists():
+        for item in sorted(current_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            stat = item.stat()
+            entries.append(
+                {
+                    "name": item.name,
+                    "path": str(item.relative_to(LIBRARY_ROOT)),
+                    "is_dir": item.is_dir(),
+                    "size": _format_size(stat.st_size),
+                    "modified": datetime.fromtimestamp(stat.st_mtime),
+                }
+            )
+
+    parent_relative = None
+    if current_path != LIBRARY_ROOT:
+        parent_relative = str(current_path.parent.relative_to(LIBRARY_ROOT))
+
+    context = {
+        "library_root": LIBRARY_ROOT,
+        "current_path": current_path,
+        "current_relative": "" if current_path == LIBRARY_ROOT else str(current_path.relative_to(LIBRARY_ROOT)),
+        "parent_relative": parent_relative,
+        "entries": entries,
+        "path_exists": current_path.exists(),
+    }
+    return render(request, "core/library.html", context)
 
 
 def queue(request):

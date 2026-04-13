@@ -82,7 +82,10 @@
           A Django base for tracking local media, deciding whether files need
           transcoding, and queueing work for local or remote execution.
         </p>
-        <p><a class="button" href="{% url 'queue' %}">Open Queue</a></p>
+        <p>
+          <a class="button" href="{% url 'queue' %}">Open Queue</a>
+          <a class="button" href="{% url 'library' %}" style="margin-left: 10px; background: #1d4ed8;">Browse Library</a>
+        </p>
         <div class="stats">
           <div class="stat">
             <strong>{{ source_count }}</strong>
