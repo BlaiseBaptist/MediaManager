@@ -204,7 +204,10 @@
           <h1>Media Database</h1>
           <div class="meta">Indexed from {{ library_root }}. This is the database view, not a file browser.</div>
         </div>
-        <a href="{% url 'home' %}">Back home</a>
+        <div class="toolbar" style="margin: 0;">
+          <a class="button secondary" href="{% url 'transcode_settings' %}">Transcode Settings</a>
+          <a class="button secondary" href="{% url 'home' %}">Back home</a>
+        </div>
       </div>
 
       <section class="card">

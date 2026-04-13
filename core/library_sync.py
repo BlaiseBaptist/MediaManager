@@ -10,7 +10,7 @@ from pathlib import Path
 
 from django.utils import timezone
 
-from .models import MediaFile, MediaMetadata, MediaSource, TranscodeJob
+from .models import MediaFile, MediaMetadata, MediaSource, TranscodeJob, TranscodeProfile
 
 LIBRARY_ROOT = Path("/media").resolve()
 SCAN_ROOTS = ("movie", "shows")
@@ -106,7 +106,6 @@ def _upsert_transcode_job(media_file: MediaFile) -> TranscodeJob:
     job = (
         TranscodeJob.objects.filter(
             media_file=media_file,
-            auto_generated=True,
             status__in=[TranscodeJob.Status.PENDING, TranscodeJob.Status.RUNNING],
         )
         .order_by("status", "-created_at")
@@ -123,6 +122,9 @@ def _upsert_transcode_job(media_file: MediaFile) -> TranscodeJob:
             auto_generated=True,
             status=TranscodeJob.Status.PENDING,
         )
+
+    if not job.auto_generated:
+        return job
 
     update_fields: list[str] = []
     if job.source_id != media_file.source_id:
@@ -174,18 +176,44 @@ def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
     return codecs
 
 
-def _matches_target_profile(probe_data: dict) -> bool:
+def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool:
     format_name = _format_name(probe_data).lower()
-    container_ok = "matroska" in format_name
+    container_requirement = (profile.target_container_contains or "").strip().lower()
+    container_ok = not container_requirement or container_requirement in format_name
     video_codecs = _stream_codecs(probe_data, "video")
     audio_codecs = _stream_codecs(probe_data, "audio")
-    video_ok = bool(video_codecs) and all(codec == "av1" for codec in video_codecs)
-    audio_ok = bool(audio_codecs) and all(codec == "flac" for codec in audio_codecs)
-    return container_ok and video_ok and audio_ok
+    subtitle_codecs = _stream_codecs(probe_data, "subtitle")
+
+    target_video_codecs = [codec.strip().lower() for codec in profile.target_video_codecs if str(codec).strip()]
+    target_audio_codecs = [codec.strip().lower() for codec in profile.target_audio_codecs if str(codec).strip()]
+    target_subtitle_codecs = [codec.strip().lower() for codec in profile.target_subtitle_codecs if str(codec).strip()]
+
+    video_ok = not target_video_codecs or (bool(video_codecs) and all(codec in target_video_codecs for codec in video_codecs))
+    audio_ok = not target_audio_codecs or (bool(audio_codecs) and all(codec in target_audio_codecs for codec in audio_codecs))
+    subtitle_ok = not target_subtitle_codecs or (
+        bool(subtitle_codecs) and all(codec in target_subtitle_codecs for codec in subtitle_codecs)
+    )
+    return container_ok and video_ok and audio_ok and subtitle_ok
+
+
+def _metadata_matches_target_profile(metadata: MediaMetadata, profile: TranscodeProfile) -> bool:
+    probe_data = {
+        "format": {
+            "format_name": metadata.container_format,
+            "format_long_name": metadata.container_format,
+        },
+        "streams": [
+            *[{"codec_type": "video", "codec_name": codec} for codec in (metadata.video_codecs or [])],
+            *[{"codec_type": "audio", "codec_name": codec} for codec in (metadata.audio_codecs or [])],
+            *[{"codec_type": "subtitle", "codec_name": codec} for codec in (metadata.subtitle_codecs or [])],
+        ],
+    }
+    return _matches_target_profile(probe_data, profile)
 
 
 def sync_media_library() -> ScanStats:
     stats = ScanStats()
+    profile = TranscodeProfile.load()
     seen_paths: set[str] = set()
 
     for root_name in SCAN_ROOTS:
@@ -203,7 +231,7 @@ def sync_media_library() -> ScanStats:
             should_probe = created or changed or metadata is None
             try:
                 if should_probe:
-                    metadata = collect_metadata_for_media_file(media_file)
+                    metadata = collect_metadata_for_media_file(media_file, profile=profile)
             except FileNotFoundError as exc:
                 media_file.stage = MediaFile.Stage.FAILED
                 media_file.save(update_fields=["stage", "updated_at"])
@@ -288,7 +316,8 @@ def _decimal_or_none(value: str | int | float | None) -> Decimal | None:
         return None
 
 
-def collect_metadata_for_media_file(media_file: MediaFile) -> MediaMetadata:
+def collect_metadata_for_media_file(media_file: MediaFile, profile: TranscodeProfile | None = None) -> MediaMetadata:
+    profile = profile or TranscodeProfile.load()
     file_path = Path(media_file.absolute_path)
     probe_data = _probe_media_file(file_path)
     format_data = probe_data.get("format", {})
@@ -301,7 +330,7 @@ def collect_metadata_for_media_file(media_file: MediaFile) -> MediaMetadata:
     metadata.video_codecs = _codec_names(probe_data, "video")
     metadata.audio_codecs = _codec_names(probe_data, "audio")
     metadata.subtitle_codecs = _codec_names(probe_data, "subtitle")
-    metadata.matches_target_profile = _matches_target_profile(probe_data)
+    metadata.matches_target_profile = _matches_target_profile(probe_data, profile)
     metadata.raw_probe = probe_data
     metadata.extracted_by = "ffprobe"
     metadata.save()
@@ -316,3 +345,20 @@ def media_stage_for_job_status(status: str) -> str:
         "failed": MediaFile.Stage.FAILED,
     }
     return mapping.get(status, MediaFile.Stage.DISCOVERED)
+
+
+def refresh_target_profile_matches() -> None:
+    profile = TranscodeProfile.load()
+    for media_file in MediaFile.objects.filter(metadata_record__isnull=False).select_related("metadata_record"):
+        try:
+            metadata = media_file.metadata_record
+        except MediaMetadata.DoesNotExist:
+            continue
+        metadata.matches_target_profile = _metadata_matches_target_profile(metadata, profile)
+        metadata.save(update_fields=["matches_target_profile", "updated_at"])
+        media_file.stage = MediaFile.Stage.READY if metadata.matches_target_profile else MediaFile.Stage.TRANSCODE_PENDING
+        media_file.save(update_fields=["stage", "updated_at"])
+        if media_file.stage == MediaFile.Stage.TRANSCODE_PENDING:
+            _upsert_transcode_job(media_file)
+        else:
+            _resolve_auto_generated_jobs(media_file, media_file.stage)

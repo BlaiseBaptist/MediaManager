@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import MediaFile, TranscodeJob
+from .models import MediaFile, TranscodeJob, TranscodeProfile
 
 
 def _authenticate_worker(request) -> HttpResponse | None:
@@ -33,9 +33,19 @@ def _job_filename(job: TranscodeJob) -> str:
 
 def _delivery_filename(job: TranscodeJob) -> str:
     if job.media_file_id and job.media_file.file_name:
-        return f"{Path(job.media_file.file_name).stem}.mp4"
+        extension = _delivery_extension()
+        return f"{Path(job.media_file.file_name).stem}{extension}"
     candidate = Path(job.input_path).stem
-    return f"{candidate}.mp4" if candidate else "output.mp4"
+    extension = _delivery_extension()
+    return f"{candidate}{extension}" if candidate else f"output{extension}"
+
+
+def _delivery_extension() -> str:
+    profile = TranscodeProfile.load()
+    extension = (profile.output_extension or ".mp4").strip()
+    if not extension.startswith("."):
+        extension = f".{extension}"
+    return extension
 
 
 def _request_json(request) -> dict[str, object]:
@@ -49,16 +59,17 @@ def _request_json(request) -> dict[str, object]:
 
 
 def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
+    profile = TranscodeProfile.load()
     payload = {
         "id": str(job.id),
         "input_url": request.build_absolute_uri(reverse("worker_job_input", args=[job.id])),
         "filename": _job_filename(job),
     }
     payload["transcode"] = {
-        "quality": "23",
-        "video_codec": "libx264",
-        "audio_codec": "aac",
-        "ffmpeg_args": ["-preset", "slow", "-movflags", "+faststart"],
+        "quality": profile.transcode_quality,
+        "video_codec": profile.transcode_video_codec,
+        "audio_codec": profile.transcode_audio_codec,
+        "ffmpeg_args": profile.transcode_ffmpeg_args,
     }
     payload["delivery"] = {
         "output_url": request.build_absolute_uri(reverse("worker_job_output", args=[job.id])),

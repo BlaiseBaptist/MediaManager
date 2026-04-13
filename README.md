@@ -33,6 +33,11 @@ Queue UI:
 - Filter jobs by status, source, or whether they were auto-generated from the media scan.
 - Use `Cancel / Requeue` on a job to move it back to `pending`.
 
+Transcode settings:
+
+- Open `/settings/transcoding/` to change the pass/fail matching rule and the worker ffmpeg defaults.
+- Saving the page refreshes stored metadata matches and queue state.
+
 To populate the database from `/Volumes/media`, run:
 
 ```bash

@@ -4,9 +4,9 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import TranscodeJobForm
-from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, sync_media_library
-from .models import MediaFile, MediaSource, TranscodeJob
+from .forms import TranscodeJobForm, TranscodeProfileForm
+from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, refresh_target_profile_matches, sync_media_library
+from .models import MediaFile, MediaSource, TranscodeJob, TranscodeProfile
 
 
 def _queue_redirect(request):
@@ -70,6 +70,28 @@ def scan_library(request):
                 f"Scan complete: {stats.scanned} files scanned, {stats.ready} ready, {stats.needs_processing} need processing, {stats.missing} marked missing.",
             )
     return redirect("media_inventory")
+
+
+def transcode_settings(request):
+    profile = TranscodeProfile.load()
+    if request.method == "POST":
+        form = TranscodeProfileForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            refresh_target_profile_matches()
+            messages.success(request, "Transcode settings saved and library classification refreshed.")
+            return redirect("transcode_settings")
+    else:
+        form = TranscodeProfileForm(instance=profile)
+
+    return render(
+        request,
+        "core/transcode_settings.html",
+        {
+            "form": form,
+            "profile": profile,
+        },
+    )
 
 
 def queue(request):

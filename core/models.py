@@ -60,6 +60,28 @@ class MediaMetadata(models.Model):
         return f"Metadata for {self.media_file.absolute_path}"
 
 
+class TranscodeProfile(models.Model):
+    target_container_contains = models.CharField(max_length=120, blank=True, default="matroska")
+    target_video_codecs = models.JSONField(default=list, blank=True)
+    target_audio_codecs = models.JSONField(default=list, blank=True)
+    target_subtitle_codecs = models.JSONField(default=list, blank=True)
+    transcode_quality = models.CharField(max_length=32, blank=True, default="23")
+    transcode_video_codec = models.CharField(max_length=120, blank=True, default="libx264")
+    transcode_audio_codec = models.CharField(max_length=120, blank=True, default="aac")
+    transcode_ffmpeg_args = models.JSONField(default=list, blank=True)
+    output_extension = models.CharField(max_length=16, blank=True, default=".mp4")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @classmethod
+    def load(cls) -> "TranscodeProfile":
+        profile, _ = cls.objects.get_or_create(pk=1)
+        return profile
+
+    def __str__(self) -> str:
+        return "Transcode profile"
+
+
 class TranscodeJob(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

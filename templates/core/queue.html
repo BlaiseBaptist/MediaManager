@@ -236,7 +236,10 @@
           <h1>Queue</h1>
           <div class="meta">Track jobs from the browser and update their state as work moves.</div>
         </div>
-        <a href="{% url 'home' %}">Back home</a>
+        <div class="actions" style="margin: 0;">
+          <a class="action-link secondary" href="{% url 'transcode_settings' %}">Transcode Settings</a>
+          <a class="action-link secondary" href="{% url 'home' %}">Back home</a>
+        </div>
       </div>
       <div class="grid">
         <section class="card">

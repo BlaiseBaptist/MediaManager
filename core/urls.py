@@ -4,6 +4,7 @@ from . import views, worker_api
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("settings/transcoding/", views.transcode_settings, name="transcode_settings"),
     path("queue/", views.queue, name="queue"),
     path("library/", views.library, name="library"),
     path("media/", views.media_inventory, name="media_inventory"),
