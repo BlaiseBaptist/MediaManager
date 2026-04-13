@@ -13,8 +13,6 @@ class MediaSource(models.Model):
 class MediaFile(models.Model):
     class Stage(models.TextChoices):
         DISCOVERED = "discovered", "Discovered"
-        METADATA_PENDING = "metadata_pending", "Metadata pending"
-        METADATA_READY = "metadata_ready", "Metadata ready"
         TRANSCODE_PENDING = "transcode_pending", "Transcode pending"
         TRANSCODING = "transcoding", "Transcoding"
         READY = "ready", "Ready"
@@ -51,6 +49,7 @@ class MediaMetadata(models.Model):
     video_codecs = models.JSONField(default=list, blank=True)
     audio_codecs = models.JSONField(default=list, blank=True)
     subtitle_codecs = models.JSONField(default=list, blank=True)
+    matches_target_profile = models.BooleanField(default=False, db_index=True)
     raw_probe = models.JSONField(default=dict, blank=True)
     extracted_by = models.CharField(max_length=120, blank=True, default="")
     probed_at = models.DateTimeField(auto_now=True)

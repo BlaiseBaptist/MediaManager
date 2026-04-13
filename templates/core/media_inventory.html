@@ -142,8 +142,8 @@
         background: #e4e7ec;
         color: #344054;
       }
-      .pill.discovered, .pill.metadata_pending, .pill.transcode_pending { background: #fff7ed; color: #9a3412; }
-      .pill.metadata_ready, .pill.ready { background: #ecfdf3; color: #027a48; }
+      .pill.discovered, .pill.transcode_pending { background: #fff7ed; color: #9a3412; }
+      .pill.ready { background: #ecfdf3; color: #027a48; }
       .pill.transcoding { background: #eff6ff; color: #1d4ed8; }
       .pill.failed, .pill.missing { background: #fef3f2; color: #b42318; }
       .meta {
@@ -211,14 +211,8 @@
               {% csrf_token %}
               <button type="submit">Rescan Library</button>
             </form>
-            <form method="post" action="{% url 'process_library_metadata' %}">
-              {% csrf_token %}
-              <button class="good" type="submit">Process Metadata</button>
-            </form>
             <a class="button secondary" href="{% url 'media_inventory' %}">All</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=discovered">Discovered</a>
-            <a class="button secondary" href="{% url 'media_inventory' %}?stage=metadata_pending">Metadata Pending</a>
-            <a class="button secondary" href="{% url 'media_inventory' %}?stage=metadata_ready">Metadata Ready</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=transcode_pending">Pending Transcodes</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=transcoding">Transcoding</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=ready">Ready</a>
@@ -228,7 +222,6 @@
           <div class="stats">
             <div class="stat"><strong>{{ counts.total }}</strong><div class="meta">Total files</div></div>
             <div class="stat"><strong>{{ counts.discovered }}</strong><div class="meta">Discovered</div></div>
-            <div class="stat"><strong>{{ counts.metadata_ready }}</strong><div class="meta">Metadata ready</div></div>
             <div class="stat"><strong>{{ counts.transcode_pending }}</strong><div class="meta">Transcode pending</div></div>
             <div class="stat"><strong>{{ counts.transcoding }}</strong><div class="meta">Transcoding</div></div>
             <div class="stat"><strong>{{ counts.ready }}</strong><div class="meta">Ready</div></div>
@@ -262,6 +255,9 @@
                     <td>
                       {% if file.metadata_record %}
                         <div><strong>{{ file.metadata_record.container_format|default:"Unknown container" }}</strong></div>
+                        <div class="meta">
+                          Matches target: {% if file.metadata_record.matches_target_profile %}Yes{% else %}No{% endif %}
+                        </div>
                         <div class="meta">
                           Video: {{ file.metadata_record.video_codecs|join:", "|default:"-" }}
                         </div>
