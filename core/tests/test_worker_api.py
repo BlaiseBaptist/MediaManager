@@ -51,7 +51,9 @@ class WorkerAPITests(TestCase):
         payload = response.json()
         self.assertEqual(payload["id"], str(job.id))
         self.assertEqual(payload["filename"], "Example Movie.mkv")
-        self.assertTrue(payload["input_url"].startswith("http://testserver/api/worker/jobs/"))
+        self.assertTrue(payload["input_url"].startswith("http://testserver/api/media/jobs/"))
+        self.assertEqual(payload["transcode"]["quality"], "23")
+        self.assertEqual(payload["delivery"]["filename"], "Example Movie.mp4")
 
         job.refresh_from_db()
         self.assertEqual(job.status, TranscodeJob.Status.RUNNING)

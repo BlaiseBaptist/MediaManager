@@ -23,8 +23,9 @@ Open `http://127.0.0.1:8000/` for the landing page, `http://127.0.0.1:8000/queue
 
 Worker API:
 
-- `GET /api/worker/jobs/next` claims the next pending transcode job and returns JSON with `id`, `input_url`, and `filename`.
-- `GET /api/worker/jobs/<job_id>/input/` streams the file the worker should download.
+- `GET /api/worker/jobs/next?worker_id=<worker_id>` claims the next pending transcode job and returns JSON with `id`, `input_url`, `filename`, `transcode`, and `delivery`.
+- `GET /api/media/jobs/<job_id>/input` streams the file the worker should download.
+- `POST /api/worker/jobs/<job_id>/complete` and `POST /api/worker/jobs/<job_id>/failed` are accepted as lifecycle callbacks.
 - Set `MEDIA_MANAGER_AUTH_TOKEN` on the server and client to require a shared bearer token.
 
 To populate the database from `/Volumes/media`, run:

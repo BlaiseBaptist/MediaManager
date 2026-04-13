@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from django.conf import settings
@@ -5,7 +6,7 @@ from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from .models import MediaFile, TranscodeJob
 
@@ -29,12 +30,40 @@ def _job_filename(job: TranscodeJob) -> str:
     return candidate or "input.bin"
 
 
-def _job_payload(request, job: TranscodeJob) -> dict[str, str]:
-    return {
+def _delivery_filename(job: TranscodeJob) -> str:
+    if job.media_file_id and job.media_file.file_name:
+        return f"{Path(job.media_file.file_name).stem}.mp4"
+    candidate = Path(job.input_path).stem
+    return f"{candidate}.mp4" if candidate else "output.mp4"
+
+
+def _request_json(request) -> dict[str, object]:
+    if not request.body:
+        return {}
+    try:
+        parsed = json.loads(request.body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
+    payload = {
         "id": str(job.id),
         "input_url": request.build_absolute_uri(reverse("worker_job_input", args=[job.id])),
         "filename": _job_filename(job),
     }
+    payload["transcode"] = {
+        "quality": "23",
+        "video_codec": "libx264",
+        "audio_codec": "aac",
+        "ffmpeg_args": ["-preset", "slow", "-movflags", "+faststart"],
+    }
+    payload["delivery"] = {
+        "output_url": request.build_absolute_uri(reverse("worker_job_output", args=[job.id])),
+        "filename": _delivery_filename(job),
+    }
+    return payload
 
 
 def _claim_next_job() -> TranscodeJob | None:
@@ -92,3 +121,48 @@ def worker_job_input(request, job_id: int):
 
     filename = _job_filename(job)
     return FileResponse(file_path.open("rb"), as_attachment=True, filename=filename)
+
+
+@require_POST
+def worker_complete_job(request, job_id: int):
+    auth_error = _authenticate_worker(request)
+    if auth_error is not None:
+        return auth_error
+
+    _request_json(request)
+    job = get_object_or_404(TranscodeJob.objects.select_related("media_file"), pk=job_id)
+    job.status = TranscodeJob.Status.COMPLETE
+    job.error_message = ""
+    job.save(update_fields=["status", "error_message", "updated_at"])
+    if job.media_file_id:
+        job.media_file.stage = MediaFile.Stage.READY
+        job.media_file.is_present = True
+        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
+    return HttpResponse(status=204)
+
+
+@require_POST
+def worker_failed_job(request, job_id: int):
+    auth_error = _authenticate_worker(request)
+    if auth_error is not None:
+        return auth_error
+
+    payload = _request_json(request)
+    job = get_object_or_404(TranscodeJob.objects.select_related("media_file"), pk=job_id)
+    job.status = TranscodeJob.Status.FAILED
+    job.error_message = str(payload.get("error", "")) if payload.get("error") is not None else ""
+    job.save(update_fields=["status", "error_message", "updated_at"])
+    if job.media_file_id:
+        job.media_file.stage = MediaFile.Stage.FAILED
+        job.media_file.save(update_fields=["stage", "updated_at"])
+    return HttpResponse(status=204)
+
+
+@require_POST
+def worker_job_output(request, job_id: int):
+    auth_error = _authenticate_worker(request)
+    if auth_error is not None:
+        return auth_error
+
+    get_object_or_404(TranscodeJob, pk=job_id)
+    return HttpResponse(status=204)
