@@ -10,6 +10,40 @@ class MediaSource(models.Model):
         return self.name
 
 
+class MediaFile(models.Model):
+    class Stage(models.TextChoices):
+        DISCOVERED = "discovered", "Discovered"
+        METADATA_PENDING = "metadata_pending", "Metadata pending"
+        METADATA_READY = "metadata_ready", "Metadata ready"
+        TRANSCODE_PENDING = "transcode_pending", "Transcode pending"
+        TRANSCODING = "transcoding", "Transcoding"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+        MISSING = "missing", "Missing"
+
+    source = models.ForeignKey(MediaSource, on_delete=models.CASCADE, related_name="media_files")
+    absolute_path = models.CharField(max_length=600, unique=True)
+    relative_path = models.CharField(max_length=500)
+    file_name = models.CharField(max_length=255)
+    size_bytes = models.BigIntegerField(default=0)
+    modified_at = models.DateTimeField(null=True, blank=True)
+    stage = models.CharField(max_length=32, choices=Stage.choices, default=Stage.DISCOVERED, db_index=True)
+    is_present = models.BooleanField(default=True, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.absolute_path
+
+    class Meta:
+        ordering = ["stage", "source__name", "relative_path"]
+        constraints = [
+            models.UniqueConstraint(fields=["source", "relative_path"], name="unique_mediafile_per_source_relative_path"),
+        ]
+
+
 class TranscodeJob(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -18,6 +52,7 @@ class TranscodeJob(models.Model):
         FAILED = "failed", "Failed"
 
     source = models.ForeignKey(MediaSource, on_delete=models.CASCADE, related_name="jobs")
+    media_file = models.ForeignKey(MediaFile, on_delete=models.CASCADE, related_name="jobs", null=True, blank=True)
     input_path = models.CharField(max_length=500, default="")
     command = models.TextField(default="")
     priority = models.PositiveSmallIntegerField(default=100, db_index=True)

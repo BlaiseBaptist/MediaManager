@@ -224,6 +224,9 @@
               <label for="{{ form.source_path.id_for_label }}">Source path</label>
               {{ form.source_path }}
               {{ form.source_path.errors }}
+              <label for="{{ form.media_path.id_for_label }}">Media file path</label>
+              {{ form.media_path }}
+              {{ form.media_path.errors }}
               <label for="{{ form.input_path.id_for_label }}">Input file</label>
               {{ form.input_path }}
               {{ form.input_path.errors }}
@@ -249,11 +252,14 @@
               {% for job in jobs %}
                 <article class="job">
                   <div class="job-head">
-                    <h3>{{ job.source.name }}: {{ job.input_path }}</h3>
+                    <h3>{{ job.source.name }}: {{ job.media_file.file_name|default:job.input_path }}</h3>
                     <span class="pill {{ job.status }}">{{ job.get_status_display }}</span>
                   </div>
                   <div class="meta">
                     Source: {{ job.source.path }} · Priority: {{ job.priority }} · Created: {{ job.created_at }}
+                    {% if job.media_file %}
+                      <br>Media DB: {{ job.media_file.absolute_path }} · Stage: {{ job.media_file.get_stage_display }}
+                    {% endif %}
                   </div>
                   <div class="command">{{ job.command }}</div>
                   {% if job.error_message %}

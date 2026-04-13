@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Media DB - Media Manager</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --text: #18212f;
+        --muted: #667085;
+        --accent: #1d4ed8;
+        --good: #047857;
+        --warn: #b45309;
+        --danger: #b42318;
+        --line: #d8e0ea;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+      main {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .topbar a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 700;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+      }
+      .card header, .card .body {
+        padding: 18px 20px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .stat {
+        padding: 14px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid var(--line);
+      }
+      .stat strong {
+        display: block;
+        font-size: 1.7rem;
+        color: var(--accent);
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      .button, button {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font: inherit;
+        font-weight: 700;
+        color: white;
+        background: var(--accent);
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .button.secondary {
+        background: #475467;
+      }
+      .button.good {
+        background: var(--good);
+      }
+      .button.warn {
+        background: var(--warn);
+      }
+      .filters {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 0 0 14px;
+      }
+      .filters a {
+        display: inline-block;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--text);
+        text-decoration: none;
+        background: #fff;
+      }
+      .filters a.active {
+        background: #dbeafe;
+        border-color: #93c5fd;
+        color: #1d4ed8;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: #e4e7ec;
+        color: #344054;
+      }
+      .pill.discovered, .pill.metadata_pending, .pill.transcode_pending { background: #fff7ed; color: #9a3412; }
+      .pill.metadata_ready, .pill.ready { background: #ecfdf3; color: #027a48; }
+      .pill.transcoding { background: #eff6ff; color: #1d4ed8; }
+      .pill.failed, .pill.missing { background: #fef3f2; color: #b42318; }
+      .meta {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 12px 0 0;
+      }
+      @media (max-width: 960px) {
+        table, thead, tbody, th, td, tr { display: block; }
+        thead { display: none; }
+        tr { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+        td { border-bottom: 0; padding: 8px 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>Media Database</h1>
+          <div class="meta">Indexed from {{ library_root }}. This is the database view, not a file browser.</div>
+        </div>
+        <a href="{% url 'home' %}">Back home</a>
+      </div>
+
+      <section class="card">
+        <header>
+          <h2>Inventory</h2>
+        </header>
+        <div class="body">
+          <div class="toolbar">
+            <form method="post" action="{% url 'scan_library' %}">
+              {% csrf_token %}
+              <button type="submit">Rescan Library</button>
+            </form>
+            <a class="button secondary" href="{% url 'media_inventory' %}">All</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=discovered">Discovered</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=transcode_pending">Pending Transcodes</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=transcoding">Transcoding</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=ready">Ready</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=failed">Failed</a>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><strong>{{ counts.total }}</strong><div class="meta">Total files</div></div>
+            <div class="stat"><strong>{{ counts.discovered }}</strong><div class="meta">Discovered</div></div>
+            <div class="stat"><strong>{{ counts.metadata_ready }}</strong><div class="meta">Metadata ready</div></div>
+            <div class="stat"><strong>{{ counts.transcode_pending }}</strong><div class="meta">Transcode pending</div></div>
+            <div class="stat"><strong>{{ counts.transcoding }}</strong><div class="meta">Transcoding</div></div>
+            <div class="stat"><strong>{{ counts.ready }}</strong><div class="meta">Ready</div></div>
+            <div class="stat"><strong>{{ counts.failed }}</strong><div class="meta">Failed</div></div>
+            <div class="stat"><strong>{{ counts.missing }}</strong><div class="meta">Missing</div></div>
+          </div>
+
+          {% if media_files %}
+            <table>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Source</th>
+                  <th>Stage</th>
+                  <th>Size</th>
+                  <th>Present</th>
+                  <th>Modified</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for file in media_files %}
+                  <tr>
+                    <td>
+                      <div><strong>{{ file.file_name }}</strong></div>
+                      <div class="meta">{{ file.absolute_path }}</div>
+                      <div class="meta">{{ file.relative_path }}</div>
+                    </td>
+                    <td>{{ file.source.name }}</td>
+                    <td><span class="pill {{ file.stage }}">{{ file.get_stage_display }}</span></td>
+                    <td>{{ file.size_bytes|filesizeformat }}</td>
+                    <td>{% if file.is_present %}Yes{% else %}No{% endif %}</td>
+                    <td>{{ file.modified_at|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="empty">No media files are indexed yet. Run a rescan to populate the database.</div>
+          {% endif %}
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

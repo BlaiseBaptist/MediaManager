@@ -1,72 +1,55 @@
-from pathlib import Path
-from datetime import datetime
-
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import TranscodeJobForm
-from .models import MediaSource, TranscodeJob
-
-LIBRARY_ROOT = Path("/Volumes/media").resolve()
-
-
-def _safe_library_path(relative_path: str | None) -> Path:
-    candidate = (LIBRARY_ROOT / (relative_path or "")).resolve()
-    if candidate == LIBRARY_ROOT or LIBRARY_ROOT in candidate.parents:
-        return candidate
-    return LIBRARY_ROOT
-
-
-def _format_size(num_bytes: int) -> str:
-    units = ["B", "KB", "MB", "GB", "TB"]
-    size = float(num_bytes)
-    for unit in units:
-        if size < 1024 or unit == units[-1]:
-            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
-        size /= 1024
-    return f"{num_bytes} B"
+from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, sync_media_library
+from .models import MediaFile, MediaSource, TranscodeJob
 
 
 def home(request):
     context = {
         "source_count": MediaSource.objects.count(),
+        "media_file_count": MediaFile.objects.count(),
         "job_count": TranscodeJob.objects.count(),
         "pending_job_count": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING).count(),
+        "ready_media_count": MediaFile.objects.filter(stage=MediaFile.Stage.READY).count(),
+        "transcode_pending_count": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODE_PENDING).count(),
     }
     return render(request, "core/home.html", context)
 
 
 def library(request):
-    relative_path = request.GET.get("path", "")
-    current_path = _safe_library_path(relative_path)
+    return redirect("media_inventory")
 
-    entries = []
-    if current_path.exists():
-        for item in sorted(current_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
-            stat = item.stat()
-            entries.append(
-                {
-                    "name": item.name,
-                    "path": str(item.relative_to(LIBRARY_ROOT)),
-                    "is_dir": item.is_dir(),
-                    "size": _format_size(stat.st_size),
-                    "modified": datetime.fromtimestamp(stat.st_mtime),
-                }
-            )
 
-    parent_relative = None
-    if current_path != LIBRARY_ROOT:
-        parent_relative = str(current_path.parent.relative_to(LIBRARY_ROOT))
+def media_inventory(request):
+    stage = request.GET.get("stage")
+    files = MediaFile.objects.select_related("source").all()
+    if stage and stage in MediaFile.Stage.values:
+        files = files.filter(stage=stage)
 
     context = {
         "library_root": LIBRARY_ROOT,
-        "current_path": current_path,
-        "current_relative": "" if current_path == LIBRARY_ROOT else str(current_path.relative_to(LIBRARY_ROOT)),
-        "parent_relative": parent_relative,
-        "entries": entries,
-        "path_exists": current_path.exists(),
+        "media_files": files,
+        "counts": {
+            "total": MediaFile.objects.count(),
+            "discovered": MediaFile.objects.filter(stage=MediaFile.Stage.DISCOVERED).count(),
+            "metadata_ready": MediaFile.objects.filter(stage=MediaFile.Stage.METADATA_READY).count(),
+            "transcode_pending": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODE_PENDING).count(),
+            "transcoding": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODING).count(),
+            "ready": MediaFile.objects.filter(stage=MediaFile.Stage.READY).count(),
+            "failed": MediaFile.objects.filter(stage=MediaFile.Stage.FAILED).count(),
+            "missing": MediaFile.objects.filter(stage=MediaFile.Stage.MISSING).count(),
+        },
+        "active_stage": stage or "",
     }
-    return render(request, "core/library.html", context)
+    return render(request, "core/media_inventory.html", context)
+
+
+def scan_library(request):
+    if request.method == "POST":
+        sync_media_library()
+    return redirect("media_inventory")
 
 
 def queue(request):
@@ -78,7 +61,7 @@ def queue(request):
     else:
         form = TranscodeJobForm()
 
-    jobs = TranscodeJob.objects.select_related("source").all()
+    jobs = TranscodeJob.objects.select_related("source", "media_file").all()
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 
@@ -101,6 +84,10 @@ def update_job_status(request, job_id, status):
     if status not in TranscodeJob.Status.values:
         return redirect("queue")
     job.status = status
+    if job.media_file_id:
+        job.media_file.stage = media_stage_for_job_status(status)
+        job.media_file.is_present = True
+        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
     if status != TranscodeJob.Status.FAILED:
         job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])

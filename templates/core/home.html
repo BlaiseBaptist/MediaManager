@@ -84,12 +84,16 @@
         </p>
         <p>
           <a class="button" href="{% url 'queue' %}">Open Queue</a>
-          <a class="button" href="{% url 'library' %}" style="margin-left: 10px; background: #1d4ed8;">Browse Library</a>
+          <a class="button" href="{% url 'media_inventory' %}" style="margin-left: 10px; background: #1d4ed8;">Open Media DB</a>
         </p>
         <div class="stats">
           <div class="stat">
             <strong>{{ source_count }}</strong>
             <div class="label">Media sources</div>
+          </div>
+          <div class="stat">
+            <strong>{{ media_file_count }}</strong>
+            <div class="label">Media files</div>
           </div>
           <div class="stat">
             <strong>{{ job_count }}</strong>
@@ -98,6 +102,14 @@
           <div class="stat">
             <strong>{{ pending_job_count }}</strong>
             <div class="label">Pending jobs</div>
+          </div>
+          <div class="stat">
+            <strong>{{ transcode_pending_count }}</strong>
+            <div class="label">Pending transcodes</div>
+          </div>
+          <div class="stat">
+            <strong>{{ ready_media_count }}</strong>
+            <div class="label">Ready media</div>
           </div>
         </div>
       </section>
