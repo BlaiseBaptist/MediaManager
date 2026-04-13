@@ -8,3 +8,7 @@ Let the local device run ffmpeg probe and mkvpropedit and ffmepg to get media da
   2. maybe find a way better than smb to send the files
   3. let windows machines easily connect to the server so that I can enlist more help for the transcoding if needed
   1. write minimal code and get AI to write most of it from a very high level description of the problem
+
+
+## Steps
+1. maintain queue on sqlite db on nuc of what command to be run after like checking on the nuc
