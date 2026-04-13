@@ -116,13 +116,6 @@ def transcode_settings(request):
 
 def queue(request):
     print(request)
-    # if request.method == "POST":
-    #     form = TranscodeJobForm(request.POST)
-    #     if form.is_valid():
-    #         form.save()
-    #         return _queue_redirect(request)
-    # else:
-    #     form = TranscodeJobForm()
     form = TranscodeProfileForm
     jobs = TranscodeJob.objects.select_related(
         "source", "media_file", "media_file__metadata_record"

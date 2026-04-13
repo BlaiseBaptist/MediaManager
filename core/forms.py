@@ -1,7 +1,7 @@
 import shlex
 
 from django import forms
-from pathlib import Path
+# from pathlib import Path
 
 from .models import TranscodeProfile
 
@@ -33,7 +33,7 @@ class TranscodeProfileForm(forms.ModelForm):
         required=False,
         widget=forms.Textarea(attrs={"rows": 4}),
         label="FFmpeg args",
-        help_text="Enter extra ffmpeg args as tokens. Flags that would override the fixed MKV / AV1 / Opus recipe are ignored.",
+        help_text="Enter extra ffmpeg args as tokens.",
     )
 
     class Meta:

@@ -13,7 +13,9 @@ def _split_env_list(name: str) -> list[str]:
     raw = os.environ.get(name, "")
     return [value.strip() for value in raw.split(",") if value.strip()]
 
+
 ALLOWED_HOSTS: list[str] = ["*"]
+
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",

@@ -244,7 +244,7 @@
       <div class="grid">
         <section class="card">
           <header>
-            <h2>Enqueue job</h2>
+            <h2>Filter Jobs</h2>
           </header>
           <div class="body">
             <div class="stats">
@@ -290,32 +290,6 @@
                 <a class="action-link secondary" href="{% url 'queue' %}">Clear</a>
               </div>
             </form>
-            <form method="post">
-              {% csrf_token %}
-              <input type="hidden" name="next" value="{{ request.get_full_path }}">
-              {{ form.non_field_errors }}
-              <label for="{{ form.source_name.id_for_label }}">Source name</label>
-              {{ form.source_name }}
-              {{ form.source_name.errors }}
-              <label for="{{ form.source_path.id_for_label }}">Source path</label>
-              {{ form.source_path }}
-              {{ form.source_path.errors }}
-              <label for="{{ form.media_path.id_for_label }}">Media file path</label>
-              {{ form.media_path }}
-              {{ form.media_path.errors }}
-              <label for="{{ form.input_path.id_for_label }}">Input file</label>
-              {{ form.input_path }}
-              {{ form.input_path.errors }}
-              <label for="{{ form.command.id_for_label }}">Command</label>
-              {{ form.command }}
-              {{ form.command.errors }}
-              <label for="{{ form.priority.id_for_label }}">Priority</label>
-              {{ form.priority }}
-              {{ form.priority.errors }}
-              <div class="actions">
-                <button type="submit">Add to queue</button>
-              </div>
-            </form>
           </div>
         </section>
 
@@ -350,11 +324,6 @@
                     <div class="error">{{ job.error_message }}</div>
                   {% endif %}
                   <div class="job-actions">
-                    <form method="post" action="{% url 'update_job_status' job.id 'pending' %}">
-                      {% csrf_token %}
-                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                      <button class="secondary" type="submit">Pending</button>
-                    </form>
                     <form method="post" action="{% url 'update_job_status' job.id 'running' %}">
                       {% csrf_token %}
                       <input type="hidden" name="next" value="{{ request.get_full_path }}">
