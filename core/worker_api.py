@@ -39,16 +39,16 @@ FLAGS_WITH_VALUES = {
 }
 
 
-def _authenticate_worker(request) -> HttpResponse | None:
-    token = getattr(settings, "MEDIA_MANAGER_AUTH_TOKEN", None)
-    if not token:
-        return None
+# def _authenticate_worker(request) -> HttpResponse | None:
+#     token = getattr(settings, "MEDIA_MANAGER_AUTH_TOKEN", None)
+#     if not token:
+#         return None
 
-    header = request.headers.get("Authorization", "")
-    expected = f"Bearer {token}"
-    if header != expected:
-        return HttpResponse(status=401)
-    return None
+#     header = request.headers.get("Authorization", "")
+#     expected = f"Bearer {token}"
+#     if header != expected:
+#         return HttpResponse(status=401)
+#     return None
 
 
 def _job_filename(job: TranscodeJob) -> str:
@@ -173,9 +173,6 @@ def _claim_next_job() -> TranscodeJob | None:
 
 @require_GET
 def worker_next_job(request):
-    auth_error = _authenticate_worker(request)
-    if auth_error is not None:
-        return auth_error
 
     job = _claim_next_job()
     if job is None:
@@ -186,9 +183,6 @@ def worker_next_job(request):
 
 @require_GET
 def worker_job_input(request, job_id: int):
-    auth_error = _authenticate_worker(request)
-    if auth_error is not None:
-        return auth_error
 
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id
@@ -205,9 +199,6 @@ def worker_job_input(request, job_id: int):
 @csrf_exempt
 @require_POST
 def worker_complete_job(request, job_id: int):
-    auth_error = _authenticate_worker(request)
-    if auth_error is not None:
-        return auth_error
 
     _request_json(request)
     job = get_object_or_404(
@@ -226,9 +217,6 @@ def worker_complete_job(request, job_id: int):
 @csrf_exempt
 @require_POST
 def worker_failed_job(request, job_id: int):
-    auth_error = _authenticate_worker(request)
-    if auth_error is not None:
-        return auth_error
 
     payload = _request_json(request)
     job = get_object_or_404(
@@ -248,9 +236,6 @@ def worker_failed_job(request, job_id: int):
 @csrf_exempt
 @require_POST
 def worker_job_output(request, job_id: int):
-    auth_error = _authenticate_worker(request)
-    if auth_error is not None:
-        return auth_error
 
     get_object_or_404(TranscodeJob, pk=job_id)
     return HttpResponse(status=204)
