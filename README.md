@@ -28,6 +28,11 @@ Worker API:
 - `POST /api/worker/jobs/<job_id>/complete` and `POST /api/worker/jobs/<job_id>/failed` are accepted as lifecycle callbacks.
 - Set `MEDIA_MANAGER_AUTH_TOKEN` on the server and client to require a shared bearer token.
 
+Queue UI:
+
+- Filter jobs by status, source, or whether they were auto-generated from the media scan.
+- Use `Cancel / Requeue` on a job to move it back to `pending`.
+
 To populate the database from `/Volumes/media`, run:
 
 ```bash

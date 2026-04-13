@@ -15,5 +15,6 @@ urlpatterns = [
     path("api/worker/jobs/<int:job_id>/failed", worker_api.worker_failed_job, name="worker_failed_job"),
     path("api/worker/jobs/<int:job_id>/output", worker_api.worker_job_output, name="worker_job_output"),
     path("queue/<int:job_id>/status/<str:status>/", views.update_job_status, name="update_job_status"),
+    path("queue/<int:job_id>/requeue/", views.requeue_job, name="requeue_job"),
     path("queue/<int:job_id>/delete/", views.delete_job, name="delete_job"),
 ]

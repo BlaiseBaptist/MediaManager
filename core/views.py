@@ -1,10 +1,15 @@
 from django.contrib import messages
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from .forms import TranscodeJobForm
 from .library_sync import LIBRARY_ROOT, media_stage_for_job_status, sync_media_library
 from .models import MediaFile, MediaSource, TranscodeJob
+
+
+def _queue_redirect(request):
+    return redirect(request.POST.get("next") or reverse("queue"))
 
 
 def home(request):
@@ -65,11 +70,22 @@ def queue(request):
         form = TranscodeJobForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect("queue")
+            return _queue_redirect(request)
     else:
         form = TranscodeJobForm()
 
     jobs = TranscodeJob.objects.select_related("source", "media_file", "media_file__metadata_record").all()
+    status_filter = request.GET.get("status", "").strip()
+    source_filter = request.GET.get("source", "").strip()
+    auto_generated_filter = request.GET.get("auto_generated", "").strip()
+
+    if status_filter and status_filter in TranscodeJob.Status.values:
+        jobs = jobs.filter(status=status_filter)
+    if source_filter:
+        jobs = jobs.filter(source_id=source_filter)
+    if auto_generated_filter in {"0", "1"}:
+        jobs = jobs.filter(auto_generated=auto_generated_filter == "1")
+
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 
@@ -77,6 +93,12 @@ def queue(request):
         "form": form,
         "jobs": jobs,
         "status_counts": status_counts,
+        "filters": {
+            "status": status_filter,
+            "source": source_filter,
+            "auto_generated": auto_generated_filter,
+        },
+        "sources": MediaSource.objects.order_by("name"),
         "pending_jobs": jobs.filter(status=TranscodeJob.Status.PENDING),
         "running_jobs": jobs.filter(status=TranscodeJob.Status.RUNNING),
         "complete_jobs": jobs.filter(status=TranscodeJob.Status.COMPLETE),
@@ -88,9 +110,9 @@ def queue(request):
 def update_job_status(request, job_id, status):
     job = get_object_or_404(TranscodeJob, pk=job_id)
     if request.method != "POST":
-        return redirect("queue")
+        return _queue_redirect(request)
     if status not in TranscodeJob.Status.values:
-        return redirect("queue")
+        return _queue_redirect(request)
     job.status = status
     if job.media_file_id:
         job.media_file.stage = media_stage_for_job_status(status)
@@ -99,11 +121,26 @@ def update_job_status(request, job_id, status):
     if status != TranscodeJob.Status.FAILED:
         job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
-    return redirect("queue")
+    return _queue_redirect(request)
+
+
+def requeue_job(request, job_id):
+    job = get_object_or_404(TranscodeJob, pk=job_id)
+    if request.method != "POST":
+        return _queue_redirect(request)
+
+    job.status = TranscodeJob.Status.PENDING
+    job.error_message = ""
+    job.save(update_fields=["status", "error_message", "updated_at"])
+    if job.media_file_id:
+        job.media_file.stage = media_stage_for_job_status(TranscodeJob.Status.PENDING)
+        job.media_file.is_present = True
+        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
+    return _queue_redirect(request)
 
 
 def delete_job(request, job_id):
     job = get_object_or_404(TranscodeJob, pk=job_id)
     if request.method == "POST":
         job.delete()
-    return redirect("queue")
+    return _queue_redirect(request)

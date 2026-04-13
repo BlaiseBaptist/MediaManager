@@ -66,6 +66,20 @@
         gap: 12px;
         margin-bottom: 20px;
       }
+      .filters {
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fafcff;
+        margin-bottom: 18px;
+      }
+      .filters-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
       .stat {
         background: var(--soft);
         border: 1px solid var(--line);
@@ -83,6 +97,14 @@
         margin: 14px 0 6px;
       }
       form input, form textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font: inherit;
+        background: white;
+      }
+      form select {
         width: 100%;
         border: 1px solid var(--line);
         border-radius: 12px;
@@ -215,8 +237,46 @@
               <div class="stat"><strong>{{ complete_jobs|length }}</strong><div class="meta">Complete</div></div>
               <div class="stat"><strong>{{ failed_jobs|length }}</strong><div class="meta">Failed</div></div>
             </div>
+            <form method="get" class="filters">
+              <div class="filters-grid">
+                <div>
+                  <label for="status-filter">Status</label>
+                  <select id="status-filter" name="status">
+                    <option value="">All statuses</option>
+                    <option value="pending" {% if filters.status == "pending" %}selected{% endif %}>Pending</option>
+                    <option value="running" {% if filters.status == "running" %}selected{% endif %}>Running</option>
+                    <option value="complete" {% if filters.status == "complete" %}selected{% endif %}>Complete</option>
+                    <option value="failed" {% if filters.status == "failed" %}selected{% endif %}>Failed</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="source-filter">Source</label>
+                  <select id="source-filter" name="source">
+                    <option value="">All sources</option>
+                    {% for source in sources %}
+                      <option value="{{ source.id }}" {% if filters.source|stringformat:"s" == source.id|stringformat:"s" %}selected{% endif %}>
+                        {{ source.name }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label for="auto-generated-filter">Queue type</label>
+                  <select id="auto-generated-filter" name="auto_generated">
+                    <option value="">All jobs</option>
+                    <option value="1" {% if filters.auto_generated == "1" %}selected{% endif %}>Auto-generated</option>
+                    <option value="0" {% if filters.auto_generated == "0" %}selected{% endif %}>Manual</option>
+                  </select>
+                </div>
+              </div>
+              <div class="actions">
+                <button type="submit">Apply filters</button>
+                <a class="action-link secondary" href="{% url 'queue' %}">Clear</a>
+              </div>
+            </form>
             <form method="post">
               {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
               {{ form.non_field_errors }}
               <label for="{{ form.source_name.id_for_label }}">Source name</label>
               {{ form.source_name }}
@@ -257,6 +317,11 @@
                   </div>
                   <div class="meta">
                     Source: {{ job.source.path }} · Priority: {{ job.priority }} · Created: {{ job.created_at }}
+                    {% if job.auto_generated %}
+                      <br>Queue: auto-generated
+                    {% else %}
+                      <br>Queue: manual
+                    {% endif %}
                     {% if job.media_file %}
                       <br>Media DB: {{ job.media_file.absolute_path }} · Stage: {{ job.media_file.get_stage_display }}
                       {% if job.media_file.metadata_record %}
@@ -271,22 +336,32 @@
                   <div class="job-actions">
                     <form method="post" action="{% url 'update_job_status' job.id 'pending' %}">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <button class="secondary" type="submit">Pending</button>
                     </form>
                     <form method="post" action="{% url 'update_job_status' job.id 'running' %}">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <button class="secondary" type="submit">Running</button>
                     </form>
                     <form method="post" action="{% url 'update_job_status' job.id 'complete' %}">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <button type="submit">Complete</button>
                     </form>
                     <form method="post" action="{% url 'update_job_status' job.id 'failed' %}">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <button class="danger" type="submit">Fail</button>
+                    </form>
+                    <form method="post" action="{% url 'requeue_job' job.id %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button class="secondary" type="submit">Cancel / Requeue</button>
                     </form>
                     <form method="post" action="{% url 'delete_job' job.id %}">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <button class="danger" type="submit">Delete</button>
                     </form>
                   </div>
