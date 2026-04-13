@@ -6,6 +6,7 @@ from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import MediaFile, TranscodeJob
@@ -123,6 +124,7 @@ def worker_job_input(request, job_id: int):
     return FileResponse(file_path.open("rb"), as_attachment=True, filename=filename)
 
 
+@csrf_exempt
 @require_POST
 def worker_complete_job(request, job_id: int):
     auth_error = _authenticate_worker(request)
@@ -141,6 +143,7 @@ def worker_complete_job(request, job_id: int):
     return HttpResponse(status=204)
 
 
+@csrf_exempt
 @require_POST
 def worker_failed_job(request, job_id: int):
     auth_error = _authenticate_worker(request)
@@ -158,6 +161,7 @@ def worker_failed_job(request, job_id: int):
     return HttpResponse(status=204)
 
 
+@csrf_exempt
 @require_POST
 def worker_job_output(request, job_id: int):
     auth_error = _authenticate_worker(request)
