@@ -181,6 +181,8 @@
             </form>
             <a class="button secondary" href="{% url 'media_inventory' %}">All</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=discovered">Discovered</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=metadata_pending">Metadata Pending</a>
+            <a class="button secondary" href="{% url 'media_inventory' %}?stage=metadata_ready">Metadata Ready</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=transcode_pending">Pending Transcodes</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=transcoding">Transcoding</a>
             <a class="button secondary" href="{% url 'media_inventory' %}?stage=ready">Ready</a>
@@ -205,6 +207,7 @@
                   <th>File</th>
                   <th>Source</th>
                   <th>Stage</th>
+                  <th>Metadata</th>
                   <th>Size</th>
                   <th>Present</th>
                   <th>Modified</th>
@@ -220,6 +223,22 @@
                     </td>
                     <td>{{ file.source.name }}</td>
                     <td><span class="pill {{ file.stage }}">{{ file.get_stage_display }}</span></td>
+                    <td>
+                      {% if file.metadata_record %}
+                        <div><strong>{{ file.metadata_record.container_format|default:"Unknown container" }}</strong></div>
+                        <div class="meta">
+                          Video: {{ file.metadata_record.video_codecs|join:", "|default:"-" }}
+                        </div>
+                        <div class="meta">
+                          Audio: {{ file.metadata_record.audio_codecs|join:", "|default:"-" }}
+                        </div>
+                        <div class="meta">
+                          Subtitle: {{ file.metadata_record.subtitle_codecs|join:", "|default:"-" }}
+                        </div>
+                      {% else %}
+                        <span class="meta">No metadata yet</span>
+                      {% endif %}
+                    </td>
                     <td>{{ file.size_bytes|filesizeformat }}</td>
                     <td>{% if file.is_present %}Yes{% else %}No{% endif %}</td>
                     <td>{{ file.modified_at|default:"-" }}</td>

@@ -12,6 +12,8 @@ def home(request):
         "media_file_count": MediaFile.objects.count(),
         "job_count": TranscodeJob.objects.count(),
         "pending_job_count": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING).count(),
+        "metadata_ready_count": MediaFile.objects.filter(stage=MediaFile.Stage.METADATA_READY).count(),
+        "metadata_pending_count": MediaFile.objects.filter(stage=MediaFile.Stage.METADATA_PENDING).count(),
         "ready_media_count": MediaFile.objects.filter(stage=MediaFile.Stage.READY).count(),
         "transcode_pending_count": MediaFile.objects.filter(stage=MediaFile.Stage.TRANSCODE_PENDING).count(),
     }
@@ -24,7 +26,7 @@ def library(request):
 
 def media_inventory(request):
     stage = request.GET.get("stage")
-    files = MediaFile.objects.select_related("source").all()
+    files = MediaFile.objects.select_related("source", "metadata_record").all()
     if stage and stage in MediaFile.Stage.values:
         files = files.filter(stage=stage)
 
@@ -61,7 +63,7 @@ def queue(request):
     else:
         form = TranscodeJobForm()
 
-    jobs = TranscodeJob.objects.select_related("source", "media_file").all()
+    jobs = TranscodeJob.objects.select_related("source", "media_file", "media_file__metadata_record").all()
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 

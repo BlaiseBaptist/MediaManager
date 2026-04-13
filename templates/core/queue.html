@@ -259,6 +259,9 @@
                     Source: {{ job.source.path }} · Priority: {{ job.priority }} · Created: {{ job.created_at }}
                     {% if job.media_file %}
                       <br>Media DB: {{ job.media_file.absolute_path }} · Stage: {{ job.media_file.get_stage_display }}
+                      {% if job.media_file.metadata_record %}
+                        <br>Container: {{ job.media_file.metadata_record.container_format|default:"-" }}
+                      {% endif %}
                     {% endif %}
                   </div>
                   <div class="command">{{ job.command }}</div>

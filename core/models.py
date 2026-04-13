@@ -29,7 +29,6 @@ class MediaFile(models.Model):
     modified_at = models.DateTimeField(null=True, blank=True)
     stage = models.CharField(max_length=32, choices=Stage.choices, default=Stage.DISCOVERED, db_index=True)
     is_present = models.BooleanField(default=True, db_index=True)
-    metadata = models.JSONField(default=dict, blank=True)
     last_seen_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -42,6 +41,24 @@ class MediaFile(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["source", "relative_path"], name="unique_mediafile_per_source_relative_path"),
         ]
+
+
+class MediaMetadata(models.Model):
+    media_file = models.OneToOneField(MediaFile, on_delete=models.CASCADE, related_name="metadata_record")
+    container_format = models.CharField(max_length=120, blank=True, default="")
+    duration_seconds = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    bitrate = models.BigIntegerField(null=True, blank=True)
+    video_codecs = models.JSONField(default=list, blank=True)
+    audio_codecs = models.JSONField(default=list, blank=True)
+    subtitle_codecs = models.JSONField(default=list, blank=True)
+    raw_probe = models.JSONField(default=dict, blank=True)
+    extracted_by = models.CharField(max_length=120, blank=True, default="")
+    probed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"Metadata for {self.media_file.absolute_path}"
 
 
 class TranscodeJob(models.Model):

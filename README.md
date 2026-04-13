@@ -25,7 +25,12 @@ To populate the database from `/Volumes/media`, run:
 
 ```bash
 pipenv run python manage.py scan_media
+pipenv run python manage.py process_metadata
 ```
+
+`scan_media` discovers files and marks new/changed ones as needing metadata. `process_metadata` runs `ffprobe` locally and stores container/codec data in `MediaMetadata`.
+
+`ffprobe` must be available on the server PATH for metadata extraction to work.
 
 ## Next steps
 
