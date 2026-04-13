@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from .models import MediaFile, MediaSource
 
-LIBRARY_ROOT = Path("/Volumes/media").resolve()
+LIBRARY_ROOT = Path("/media").resolve()
 SCAN_ROOTS = ("movie", "shows")
 MEDIA_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts", ".mpg", ".mpeg"}
 
