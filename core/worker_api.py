@@ -1,8 +1,9 @@
 import json
-from urllib.parse import quote, urljoin
+
+# from urllib.parse import quote, urljoin
 from pathlib import Path
 
-from django.conf import settings
+# from django.conf import settings
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -39,18 +40,6 @@ FLAGS_WITH_VALUES = {
 }
 
 
-# def _authenticate_worker(request) -> HttpResponse | None:
-#     token = getattr(settings, "MEDIA_MANAGER_AUTH_TOKEN", None)
-#     if not token:
-#         return None
-
-#     header = request.headers.get("Authorization", "")
-#     expected = f"Bearer {token}"
-#     if header != expected:
-#         return HttpResponse(status=401)
-#     return None
-
-
 def _job_filename(job: TranscodeJob) -> str:
     if job.media_file_id and job.media_file.file_name:
         return job.media_file.file_name
@@ -59,23 +48,7 @@ def _job_filename(job: TranscodeJob) -> str:
 
 
 def _job_input_url(request, job: TranscodeJob) -> str:
-    file_base_url = getattr(settings, "MEDIA_MANAGER_FILE_BASE_URL", None)
-    if file_base_url:
-        source_path = (
-            job.media_file.absolute_path if job.media_file_id else job.input_path
-        )
-        try:
-            relative_path = (
-                Path(source_path).resolve().relative_to(Path("/media").resolve())
-            )
-        except ValueError:
-            return request.build_absolute_uri(
-                reverse("worker_job_input", args=[job.id])
-            )
-        base = file_base_url.rstrip("/") + "/"
-        return urljoin(base, quote(str(relative_path).replace("\\", "/")))
-
-    return request.build_absolute_uri(reverse("worker_job_input", args=[job.id]))
+    return "http://nuc" + job.input_path[6:]
 
 
 def _delivery_filename(job: TranscodeJob) -> str:
@@ -125,6 +98,7 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
     payload = {
         "id": str(job.id),
         "input_url": _job_input_url(request, job),
+        "output_url": _job_input_url(request, job),
         "filename": _job_filename(job),
     }
     payload["transcode"] = {
@@ -132,12 +106,6 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
         "video_codec": profile.transcode_video_codec,
         "audio_codec": profile.transcode_audio_codec,
         "ffmpeg_args": _sanitize_ffmpeg_args(profile.transcode_ffmpeg_args),
-    }
-    payload["delivery"] = {
-        "output_url": request.build_absolute_uri(
-            reverse("worker_job_output", args=[job.id])
-        ),
-        "filename": _delivery_filename(job),
     }
     return payload
 

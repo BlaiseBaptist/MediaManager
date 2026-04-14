@@ -69,7 +69,6 @@ The client expects this shape:
 {
   "id": "job-123",
   "input_url": "http://localhost:8000/api/media/jobs/job-123/input",
-  "filename": "input.mp4",
   "transcode": {
     "quality": "23",
     "video_codec": "libx264",
@@ -78,7 +77,6 @@ The client expects this shape:
   },
   "delivery": {
     "output_url": "http://localhost:8000/api/worker/jobs/job-123/output",
-    "filename": "output.mp4"
   }
 }
 ```

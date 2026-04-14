@@ -73,7 +73,7 @@ class MediaMetadata(models.Model):
 
 class TranscodeProfile(models.Model):
     FIXED_TRANSCODE_QUALITY = "23"
-    FIXED_TRANSCODE_VIDEO_CODEC = "libaom-av1"
+    FIXED_TRANSCODE_VIDEO_CODEC = "libsav1"
     FIXED_TRANSCODE_AUDIO_CODEC = "libopus"
     FIXED_OUTPUT_EXTENSION = ".mkv"
     FIXED_TARGET_CONTAINER_CONTAINS = "matroska"
