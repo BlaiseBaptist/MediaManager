@@ -4,8 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-django = "*"
-gunicorn = "*"
+python-lsp-server = {extras = ["all"], version = "*"}
 
 [dev-packages]
 
