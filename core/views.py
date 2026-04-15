@@ -4,14 +4,15 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import TranscodeProfileForm
+# from .forms import TranscodeProfileForm
 from .library_sync import (
     LIBRARY_ROOT,
     media_stage_for_job_status,
     refresh_target_profile_matches,
     sync_media_library,
 )
-from .models import MediaFile, MediaSource, TranscodeJob, TranscodeProfile
+from .models import MediaFile, MediaSource, TranscodeJob
+from django.http import HttpResponse
 
 
 def _queue_redirect(request):
@@ -86,33 +87,14 @@ def scan_library(request):
     return redirect("media_inventory")
 
 
-def transcode_settings(request):
-    profile = TranscodeProfile.load()
+def reset_failed_tasks(request):
     if request.method == "POST":
-        form = TranscodeProfileForm(request.POST, instance=profile)
-        if form.is_valid():
-            form.save()
-            refresh_target_profile_matches()
-            messages.success(
-                request,
-                "Transcode settings saved and library classification refreshed.",
-            )
-            return redirect("transcode_settings")
-    else:
-        form = TranscodeProfileForm(instance=profile)
-
-    return render(
-        request,
-        "core/transcode_settings.html",
-        {
-            "form": form,
-            "profile": profile,
-        },
-    )
+        TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED).update(
+            status=TranscodeJob.Status.PENDING)
+    return redirect("queue")
 
 
 def queue(request):
-    form = TranscodeProfileForm
     jobs = TranscodeJob.objects.select_related(
         "source", "media_file", "media_file__metadata_record"
     ).all()
@@ -135,7 +117,6 @@ def queue(request):
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 
     context = {
-        "form": form,
         "jobs": page_obj,
         "page_obj": page_obj,
         "status_counts": status_counts,

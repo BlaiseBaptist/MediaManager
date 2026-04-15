@@ -4,8 +4,6 @@ from . import views, worker_api
 
 urlpatterns = [
     path("", views.home, name="home"),
-    path("settings/transcoding/", views.transcode_settings,
-         name="transcode_settings"),
     path("queue/", views.queue, name="queue"),
     path("media/", views.media_inventory, name="media_inventory"),
     path("media/scan/", views.scan_library, name="scan_library"),
@@ -35,6 +33,7 @@ urlpatterns = [
         views.update_job_status,
         name="update_job_status",
     ),
+    path('reset-failed/', views.reset_failed_tasks, name='reset_failed_tasks'),
     path("queue/<int:job_id>/requeue/", views.requeue_job, name="requeue_job"),
     path("queue/<int:job_id>/delete/", views.delete_job, name="delete_job"),
 ]
