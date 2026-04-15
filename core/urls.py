@@ -7,7 +7,6 @@ urlpatterns = [
     path("settings/transcoding/", views.transcode_settings,
          name="transcode_settings"),
     path("queue/", views.queue, name="queue"),
-    path("library/", views.library, name="library"),
     path("media/", views.media_inventory, name="media_inventory"),
     path("media/scan/", views.scan_library, name="scan_library"),
     path("api/worker/jobs/next", worker_api.worker_next_job, name="worker_next_job"),
@@ -30,11 +29,6 @@ urlpatterns = [
         "api/worker/jobs/<int:job_id>/failed",
         worker_api.worker_failed_job,
         name="worker_failed_job",
-    ),
-    path(
-        "api/worker/jobs/<int:job_id>/output",
-        worker_api.worker_job_output,
-        name="worker_job_output",
     ),
     path(
         "queue/<int:job_id>/status/<str:status>/",

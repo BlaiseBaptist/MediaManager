@@ -18,7 +18,7 @@ from .models import (
     TranscodeProfile,
 )
 
-LIBRARY_ROOT = Path("/scratch/media").resolve()
+LIBRARY_ROOT = Path("/media").resolve()
 SCAN_ROOTS = ("movie", "shows")
 MEDIA_EXTENSIONS = {
     ".mkv",
@@ -77,7 +77,6 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
     modified_at = datetime.fromtimestamp(
         stat.st_mtime, tz=timezone.get_current_timezone()
     )
-
     media_file, created = MediaFile.objects.get_or_create(
         source=source,
         relative_path=relative_path,
@@ -116,7 +115,6 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
                 "updated_at",
             ]
         )
-
     return media_file, created, changed
 
 
@@ -207,7 +205,7 @@ def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool
     container_requirement = (
         (
             profile.target_container_contains
-            or TranscodeProfile.FIXED_TARGET_CONTAINER_CONTAINS
+            or TranscodeProfile.TARGET_CONTAINER
         )
         .strip()
         .lower()
@@ -220,14 +218,14 @@ def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool
     target_video_codecs = [
         codec.strip().lower()
         for codec in (
-            profile.target_video_codecs or TranscodeProfile.FIXED_TARGET_VIDEO_CODECS
+            profile.target_video_codecs or TranscodeProfile.TARGET_VIDEO_CODECS
         )
         if str(codec).strip()
     ]
     target_audio_codecs = [
         codec.strip().lower()
         for codec in (
-            profile.target_audio_codecs or TranscodeProfile.FIXED_TARGET_AUDIO_CODECS
+            profile.target_audio_codecs or TranscodeProfile.TARGET_AUDIO_CODECS
         )
         if str(codec).strip()
     ]
@@ -235,7 +233,7 @@ def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool
         codec.strip().lower()
         for codec in (
             profile.target_subtitle_codecs
-            or TranscodeProfile.FIXED_TARGET_SUBTITLE_CODECS
+            or TranscodeProfile.TARGET_SUBTITLE_CODECS
         )
         if str(codec).strip()
     ]

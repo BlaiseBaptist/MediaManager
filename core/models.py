@@ -72,34 +72,17 @@ class MediaMetadata(models.Model):
 
 
 class TranscodeProfile(models.Model):
-    FIXED_TRANSCODE_QUALITY = "23"
-    FIXED_TRANSCODE_VIDEO_CODEC = "libsav1"
-    FIXED_TRANSCODE_AUDIO_CODEC = "libopus"
-    FIXED_OUTPUT_EXTENSION = ".mkv"
-    FIXED_TARGET_CONTAINER_CONTAINS = "matroska"
-    FIXED_TARGET_VIDEO_CODECS = ["av1"]
-    FIXED_TARGET_AUDIO_CODECS = ["opus"]
-    FIXED_TARGET_SUBTITLE_CODECS: list[str] = []
+    TARGET_CONTAINER = "matroska"
+    TARGET_VIDEO_CODECS = ["av1"]
+    TARGET_AUDIO_CODECS = ["opus"]
+    TARGET_SUBTITLE_CODECS: list[str] = []
 
     target_container_contains = models.CharField(
-        max_length=120, blank=True, default=FIXED_TARGET_CONTAINER_CONTAINS
+        max_length=120, blank=True, default=TARGET_CONTAINER
     )
     target_video_codecs = models.JSONField(default=list, blank=True)
     target_audio_codecs = models.JSONField(default=list, blank=True)
     target_subtitle_codecs = models.JSONField(default=list, blank=True)
-    transcode_quality = models.CharField(
-        max_length=32, blank=True, default=FIXED_TRANSCODE_QUALITY
-    )
-    transcode_video_codec = models.CharField(
-        max_length=120, blank=True, default=FIXED_TRANSCODE_VIDEO_CODEC
-    )
-    transcode_audio_codec = models.CharField(
-        max_length=120, blank=True, default=FIXED_TRANSCODE_AUDIO_CODEC
-    )
-    transcode_ffmpeg_args = models.JSONField(default=list, blank=True)
-    output_extension = models.CharField(
-        max_length=16, blank=True, default=FIXED_OUTPUT_EXTENSION
-    )
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -107,14 +90,10 @@ class TranscodeProfile(models.Model):
     def load(cls) -> "TranscodeProfile":
         profile, _ = cls.objects.get_or_create(pk=1)
         fixed_values = {
-            "target_container_contains": cls.FIXED_TARGET_CONTAINER_CONTAINS,
-            "target_video_codecs": cls.FIXED_TARGET_VIDEO_CODECS,
-            "target_audio_codecs": cls.FIXED_TARGET_AUDIO_CODECS,
-            "target_subtitle_codecs": cls.FIXED_TARGET_SUBTITLE_CODECS,
-            "transcode_quality": cls.FIXED_TRANSCODE_QUALITY,
-            "transcode_video_codec": cls.FIXED_TRANSCODE_VIDEO_CODEC,
-            "transcode_audio_codec": cls.FIXED_TRANSCODE_AUDIO_CODEC,
-            "output_extension": cls.FIXED_OUTPUT_EXTENSION,
+            "target_container_contains": cls.TARGET_CONTAINER,
+            "target_video_codecs": cls.TARGET_VIDEO_CODECS,
+            "target_audio_codecs": cls.TARGET_AUDIO_CODECS,
+            "target_subtitle_codecs": cls.TARGET_SUBTITLE_CODECS,
         }
         changed = False
         for field_name, expected in fixed_values.items():

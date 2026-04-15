@@ -36,10 +36,6 @@ def home(request):
     return render(request, "core/home.html", context)
 
 
-def library(request):
-    return redirect("media_inventory")
-
-
 def media_inventory(request):
     stage = request.GET.get("stage")
     files = MediaFile.objects.select_related("source", "metadata_record").all()
@@ -84,7 +80,8 @@ def scan_library(request):
         else:
             messages.success(
                 request,
-                f"Scan complete: {stats.scanned} files scanned, {stats.ready} ready, {stats.needs_processing} need processing, {stats.missing} marked missing.",
+                f"Scan complete: {stats.scanned} files scanned, {stats.ready} ready, {
+                    stats.needs_processing} need processing, {stats.missing} marked missing.",
             )
     return redirect("media_inventory")
 
@@ -115,7 +112,6 @@ def transcode_settings(request):
 
 
 def queue(request):
-    print(request)
     form = TranscodeProfileForm
     jobs = TranscodeJob.objects.select_related(
         "source", "media_file", "media_file__metadata_record"
@@ -168,7 +164,8 @@ def update_job_status(request, job_id, status):
     if job.media_file_id:
         job.media_file.stage = media_stage_for_job_status(status)
         job.media_file.is_present = True
-        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
+        job.media_file.save(
+            update_fields=["stage", "is_present", "updated_at"])
     if status != TranscodeJob.Status.FAILED:
         job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
@@ -184,9 +181,11 @@ def requeue_job(request, job_id):
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:
-        job.media_file.stage = media_stage_for_job_status(TranscodeJob.Status.PENDING)
+        job.media_file.stage = media_stage_for_job_status(
+            TranscodeJob.Status.PENDING)
         job.media_file.is_present = True
-        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
+        job.media_file.save(
+            update_fields=["stage", "is_present", "updated_at"])
     return _queue_redirect(request)
 
 

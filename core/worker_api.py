@@ -1,17 +1,16 @@
+from .models import MediaFile, TranscodeJob, TranscodeProfile
 import json
 
 # from urllib.parse import quote, urljoin
 from pathlib import Path
-
+from datetime import timedelta, datetime
 # from django.conf import settings
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST
-
-from .models import MediaFile, TranscodeJob, TranscodeProfile
+from django.views.decorators.http import require_GET
+from .library_sync import LIBRARY_ROOT
 
 BLOCKED_FFMPEG_FLAGS = {
     "-c",
@@ -48,7 +47,7 @@ def _job_filename(job: TranscodeJob) -> str:
 
 
 def _job_input_url(request, job: TranscodeJob) -> str:
-    return "http://nuc" + job.input_path[6:]
+    return "http://nuc" + job.input_path[len(str(LIBRARY_ROOT)):]
 
 
 def _delivery_filename(job: TranscodeJob) -> str:
@@ -102,10 +101,9 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
         "filename": _job_filename(job),
     }
     payload["transcode"] = {
-        "quality": profile.transcode_quality,
-        "video_codec": profile.transcode_video_codec,
-        "audio_codec": profile.transcode_audio_codec,
-        "ffmpeg_args": _sanitize_ffmpeg_args(profile.transcode_ffmpeg_args),
+        "quality": "HIGH",
+        "video_codec": profile.target_video_codecs[0],
+        "audio_codec": profile.target_audio_codecs[0],
     }
     return payload
 
@@ -118,7 +116,17 @@ def _claim_next_job() -> TranscodeJob | None:
         .first()
     )
     if candidate is None:
-        return None
+        candidate = (TranscodeJob.objects.select_related("source", "media_file")
+                     .filter(status=TranscodeJob.Status.RUNNING)
+                     .order_by("priority", "-created_at").last())
+        if candidate is None:
+            return None
+        if ((candidate.updated_at + timedelta(hours=12) >
+             datetime.now(timezone.get_current_timezone()))):
+            return None
+        TranscodeJob.objects.filter(
+            pk=candidate.pk, status=TranscodeJob.Status.RUNNING
+        ).update(status=TranscodeJob.Status.PENDING)
 
     updated = TranscodeJob.objects.filter(
         pk=candidate.pk, status=TranscodeJob.Status.PENDING
@@ -141,7 +149,6 @@ def _claim_next_job() -> TranscodeJob | None:
 
 @require_GET
 def worker_next_job(request):
-
     job = _claim_next_job()
     if job is None:
         return HttpResponse(status=204)
@@ -165,7 +172,7 @@ def worker_job_input(request, job_id: int):
 
 
 @csrf_exempt
-@require_POST
+@require_GET
 def worker_complete_job(request, job_id: int):
 
     _request_json(request)
@@ -178,12 +185,13 @@ def worker_complete_job(request, job_id: int):
     if job.media_file_id:
         job.media_file.stage = MediaFile.Stage.READY
         job.media_file.is_present = True
-        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
+        job.media_file.save(
+            update_fields=["stage", "is_present", "updated_at"])
     return HttpResponse(status=204)
 
 
 @csrf_exempt
-@require_POST
+@require_GET
 def worker_failed_job(request, job_id: int):
 
     payload = _request_json(request)
@@ -192,18 +200,11 @@ def worker_failed_job(request, job_id: int):
     )
     job.status = TranscodeJob.Status.FAILED
     job.error_message = (
-        str(payload.get("error", "")) if payload.get("error") is not None else ""
+        str(payload.get("error", "")) if payload.get(
+            "error") is not None else ""
     )
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:
         job.media_file.stage = MediaFile.Stage.FAILED
         job.media_file.save(update_fields=["stage", "updated_at"])
-    return HttpResponse(status=204)
-
-
-@csrf_exempt
-@require_POST
-def worker_job_output(request, job_id: int):
-
-    get_object_or_404(TranscodeJob, pk=job_id)
     return HttpResponse(status=204)
