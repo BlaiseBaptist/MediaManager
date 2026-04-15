@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 from .library_sync import LIBRARY_ROOT
-
+import os
 BLOCKED_FFMPEG_FLAGS = {
     "-c",
     "-codec",
@@ -47,24 +47,11 @@ def _job_filename(job: TranscodeJob) -> str:
 
 
 def _job_input_url(request, job: TranscodeJob) -> str:
-    return "http://nuc" + job.input_path[len(str(LIBRARY_ROOT)):]
+    return job.input_path[len(str(LIBRARY_ROOT)):]
 
 
-def _delivery_filename(job: TranscodeJob) -> str:
-    if job.media_file_id and job.media_file.file_name:
-        extension = _delivery_extension()
-        return f"{Path(job.media_file.file_name).stem}{extension}"
-    candidate = Path(job.input_path).stem
-    extension = _delivery_extension()
-    return f"{candidate}{extension}" if candidate else f"output{extension}"
-
-
-def _delivery_extension() -> str:
-    profile = TranscodeProfile.load()
-    extension = (profile.output_extension or ".mp4").strip()
-    if not extension.startswith("."):
-        extension = f".{extension}"
-    return extension
+def _job_output_url(request, job: TranscodeJob) -> str:
+    return "/scratch/"+str(job.media_file.id)+".part"
 
 
 def _request_json(request) -> dict[str, object]:
@@ -97,7 +84,7 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
     payload = {
         "id": str(job.id),
         "input_url": _job_input_url(request, job),
-        "output_url": _job_input_url(request, job),
+        "output_url": _job_output_url(request, job),
         "filename": _job_filename(job),
     }
     payload["transcode"] = {
@@ -179,6 +166,7 @@ def worker_complete_job(request, job_id: int):
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id
     )
+    os.rename("/media/scratch/"+str(job.media_file.id)+".part", job.input_path)
     job.status = TranscodeJob.Status.COMPLETE
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
