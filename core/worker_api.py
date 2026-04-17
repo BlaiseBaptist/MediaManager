@@ -1,10 +1,8 @@
 from .models import MediaFile, TranscodeJob, TranscodeProfile
 import json
-
-# from urllib.parse import quote, urljoin
+import django.db
 from pathlib import Path
-from datetime import timedelta, datetime
-# from django.conf import settings
+from datetime import timedelta
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -96,42 +94,34 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
 
 
 def _claim_next_job() -> TranscodeJob | None:
-    candidate = (
-        TranscodeJob.objects.select_related("source", "media_file")
-        .filter(status=TranscodeJob.Status.PENDING)
-        .order_by("priority", "-created_at")
-        .first()
-    )
-    if candidate is None:
-        candidate = (TranscodeJob.objects.select_related("source", "media_file")
-                     .filter(status=TranscodeJob.Status.RUNNING)
-                     .order_by("priority", "-created_at").last())
+    stale_jobs = (TranscodeJob.objects
+                  .filter(status=TranscodeJob.Status.RUNNING)
+                  .filter(updated_at__lt=timezone.now() - timedelta(hours=12))
+                  .update(status=TranscodeJob.Status.PENDING))
+    print(stale_jobs)
+    with django.db.transaction.atomic():
+        candidate = (
+            TranscodeJob.objects
+            .select_related("source", "media_file")
+            .filter(status=TranscodeJob.Status.PENDING)
+            .order_by("priority", "media_file__size_bytes")
+            .select_for_update()
+            .first())
         if candidate is None:
             return None
-        if ((candidate.updated_at + timedelta(hours=12) >
-             datetime.now(timezone.get_current_timezone()))):
+        candidate.status = TranscodeJob.Status.RUNNING
+        candidate.updated_at = timezone.now()
+        print(candidate.input_path, candidate.updated_at)
+
+        candidate.media_file.stage = MediaFile.Stage.TRANSCODING
+        candidate.media_file.is_present = True
+        candidate.media_file.updated_at = timezone.now()
+        try:
+            candidate.save()
+            return candidate
+        except django.db.utils.OperationalError:
             return None
-        TranscodeJob.objects.filter(
-            pk=candidate.pk, status=TranscodeJob.Status.RUNNING
-        ).update(status=TranscodeJob.Status.PENDING)
-
-    updated = TranscodeJob.objects.filter(
-        pk=candidate.pk, status=TranscodeJob.Status.PENDING
-    ).update(
-        status=TranscodeJob.Status.RUNNING, error_message="", updated_at=timezone.now()
-    )
-    if not updated:
         return None
-
-    if candidate.media_file_id:
-        MediaFile.objects.filter(pk=candidate.media_file_id).update(
-            stage=MediaFile.Stage.TRANSCODING,
-            is_present=True,
-            updated_at=timezone.now(),
-        )
-
-    candidate.refresh_from_db()
-    return candidate
 
 
 @require_GET
@@ -158,8 +148,8 @@ def worker_job_input(request, job_id: int):
     return FileResponse(file_path.open("rb"), as_attachment=True, filename=filename)
 
 
-@csrf_exempt
-@require_GET
+@ csrf_exempt
+@ require_GET
 def worker_complete_job(request, job_id: int):
 
     _request_json(request)
@@ -178,8 +168,8 @@ def worker_complete_job(request, job_id: int):
     return HttpResponse(status=204)
 
 
-@csrf_exempt
-@require_GET
+@ csrf_exempt
+@ require_GET
 def worker_failed_job(request, job_id: int):
 
     payload = _request_json(request)
