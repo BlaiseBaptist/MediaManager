@@ -94,11 +94,10 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
 
 
 def _claim_next_job() -> TranscodeJob | None:
-    stale_jobs = (TranscodeJob.objects
-                  .filter(status=TranscodeJob.Status.RUNNING)
-                  .filter(updated_at__lt=timezone.now() - timedelta(hours=12))
-                  .update(status=TranscodeJob.Status.PENDING))
-    print(stale_jobs)
+    (TranscodeJob.objects
+     .filter(status=TranscodeJob.Status.RUNNING)
+     .filter(updated_at__lt=timezone.now() - timedelta(hours=12))
+     .update(status=TranscodeJob.Status.PENDING))
     with django.db.transaction.atomic():
         candidate = (
             TranscodeJob.objects
@@ -111,7 +110,6 @@ def _claim_next_job() -> TranscodeJob | None:
             return None
         candidate.status = TranscodeJob.Status.RUNNING
         candidate.updated_at = timezone.now()
-        print(candidate.input_path, candidate.updated_at)
 
         candidate.media_file.stage = MediaFile.Stage.TRANSCODING
         candidate.media_file.is_present = True
@@ -148,8 +146,8 @@ def worker_job_input(request, job_id: int):
     return FileResponse(file_path.open("rb"), as_attachment=True, filename=filename)
 
 
-@ csrf_exempt
-@ require_GET
+@csrf_exempt
+@require_GET
 def worker_complete_job(request, job_id: int):
 
     _request_json(request)
@@ -168,8 +166,8 @@ def worker_complete_job(request, job_id: int):
     return HttpResponse(status=204)
 
 
-@ csrf_exempt
-@ require_GET
+@csrf_exempt
+@require_GET
 def worker_failed_job(request, job_id: int):
 
     payload = _request_json(request)
