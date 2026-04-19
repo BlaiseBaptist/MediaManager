@@ -205,6 +205,10 @@
 					<div class="meta">Indexed from {{ library_root }}. This is the database view, not a file browser.</div>
 				</div>
 				<div class="toolbar" style="margin: 0;">
+	        <form action="{% url 'delete_missing_files' %}" method="POST">
+	            {% csrf_token %}
+	            <button type="submit">Delete All Missing</button>
+	        </form>
 					<a class="button secondary" href="{% url 'home' %}">Back home</a>
 				</div>
 			</div>

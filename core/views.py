@@ -87,11 +87,24 @@ def scan_library(request):
     return redirect("media_inventory")
 
 
-def reset_failed_tasks(request):
+def reset_failed_jobs(request):
     if request.method == "POST":
         TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED).update(
             status=TranscodeJob.Status.PENDING)
     return redirect("queue")
+
+
+def delete_all_jobs(request):
+    if request.method == "POST":
+        TranscodeJob.objects.all().delete()
+    return scan_library(request)
+
+
+def delete_missing_files(request):
+    if request.method == "POST":
+        MediaFile.objects.filter(stage=MediaFile.Stage.MISSING).delete()
+        MediaFile.objects.filter(stage=MediaFile.Stage.FAILED).delete()
+    return scan_library(request)
 
 
 def queue(request):

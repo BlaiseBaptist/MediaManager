@@ -237,9 +237,13 @@
           <div class="meta">Track jobs from the browser and update their state as work moves.</div>
         </div>
         <div class="actions" style="margin: 0;">
-        <form action="{% url 'reset_failed_tasks' %}" method="POST">
+        <form action="{% url 'reset_failed_jobs' %}" method="POST">
             {% csrf_token %}
             <button type="submit">Reset All Failed</button>
+        </form>
+        <form action="{% url 'delete_all_jobs' %}" method="POST">
+            {% csrf_token %}
+            <button type="submit">Delete All jobs</button>
         </form>
           <a class="action-link secondary" href="{% url 'home' %}">Back home</a>
         </div>
