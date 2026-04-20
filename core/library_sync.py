@@ -39,7 +39,7 @@ class ScanStats:
     created: int = 0
     updated: int = 0
     missing: int = 0
-    ready: int = 0
+    complete: int = 0
     needs_processing: int = 0
     failed: int = 0
 
@@ -165,7 +165,7 @@ def _upsert_transcode_job(media_file: MediaFile) -> TranscodeJob:
 
 def _resolve_auto_generated_jobs(media_file: MediaFile, status: str) -> None:
     job_status = {
-        MediaFile.Stage.READY: TranscodeJob.Status.COMPLETE,
+        MediaFile.Stage.COMPLETE: TranscodeJob.Status.COMPLETE,
         MediaFile.Stage.FAILED: TranscodeJob.Status.FAILED,
     }.get(status)
     if job_status is None:
@@ -323,7 +323,7 @@ def sync_media_library() -> ScanStats:
                 continue
 
             media_file.stage = (
-                MediaFile.Stage.READY
+                MediaFile.Stage.COMPLETE
                 if metadata.matches_target_profile
                 else MediaFile.Stage.TRANSCODE_PENDING
             )
@@ -338,8 +338,8 @@ def sync_media_library() -> ScanStats:
                 stats.created += 1
             else:
                 stats.updated += 1
-            if media_file.stage == MediaFile.Stage.READY:
-                stats.ready += 1
+            if media_file.stage == MediaFile.Stage.COMPLETE:
+                stats.complete += 1
             else:
                 stats.needs_processing += 1
 
@@ -421,32 +421,7 @@ def media_stage_for_job_status(status: str) -> str:
     mapping = {
         "pending": MediaFile.Stage.TRANSCODE_PENDING,
         "running": MediaFile.Stage.TRANSCODING,
-        "complete": MediaFile.Stage.READY,
+        "complete": MediaFile.Stage.COMPLETE,
         "failed": MediaFile.Stage.FAILED,
     }
     return mapping.get(status, MediaFile.Stage.DISCOVERED)
-
-
-def refresh_target_profile_matches() -> None:
-    profile = TranscodeProfile.load()
-    for media_file in MediaFile.objects.filter(
-        metadata_record__isnull=False
-    ).select_related("metadata_record"):
-        try:
-            metadata = media_file.metadata_record
-        except MediaMetadata.DoesNotExist:
-            continue
-        metadata.matches_target_profile = _metadata_matches_target_profile(
-            metadata, profile
-        )
-        metadata.save(update_fields=["matches_target_profile", "updated_at"])
-        media_file.stage = (
-            MediaFile.Stage.READY
-            if metadata.matches_target_profile
-            else MediaFile.Stage.TRANSCODE_PENDING
-        )
-        media_file.save(update_fields=["stage", "updated_at"])
-        if media_file.stage == MediaFile.Stage.TRANSCODE_PENDING:
-            _upsert_transcode_job(media_file)
-        else:
-            _resolve_auto_generated_jobs(media_file, media_file.stage)

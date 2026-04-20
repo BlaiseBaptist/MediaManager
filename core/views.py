@@ -4,15 +4,12 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-# from .forms import TranscodeProfileForm
 from .library_sync import (
     LIBRARY_ROOT,
     media_stage_for_job_status,
-    refresh_target_profile_matches,
     sync_media_library,
 )
 from .models import MediaFile, MediaSource, TranscodeJob
-from django.http import HttpResponse
 
 
 def _queue_redirect(request):
@@ -27,8 +24,8 @@ def home(request):
         "pending_job_count": TranscodeJob.objects.filter(
             status=TranscodeJob.Status.PENDING
         ).count(),
-        "ready_media_count": MediaFile.objects.filter(
-            stage=MediaFile.Stage.READY
+        "complete_media_count": MediaFile.objects.filter(
+            stage=MediaFile.Stage.COMPLETE
         ).count(),
         "transcode_pending_count": MediaFile.objects.filter(
             stage=MediaFile.Stage.TRANSCODE_PENDING
@@ -63,7 +60,7 @@ def media_inventory(request):
             "transcoding": MediaFile.objects.filter(
                 stage=MediaFile.Stage.TRANSCODING
             ).count(),
-            "ready": MediaFile.objects.filter(stage=MediaFile.Stage.READY).count(),
+            "complete": MediaFile.objects.filter(stage=MediaFile.Stage.COMPLETE).count(),
             "failed": MediaFile.objects.filter(stage=MediaFile.Stage.FAILED).count(),
             "missing": MediaFile.objects.filter(stage=MediaFile.Stage.MISSING).count(),
         },
@@ -81,7 +78,7 @@ def scan_library(request):
         else:
             messages.success(
                 request,
-                f"Scan complete: {stats.scanned} files scanned, {stats.ready} ready, {
+                f"Scan complete: {stats.scanned} files scanned, {stats.complete} complete, {
                     stats.needs_processing} need processing, {stats.missing} marked missing.",
             )
     return redirect("media_inventory")
@@ -113,37 +110,31 @@ def queue(request):
     ).all()
     status_filter = request.GET.get("status", "").strip()
     source_filter = request.GET.get("source", "").strip()
-    auto_generated_filter = request.GET.get("auto_generated", "").strip()
-
+    name_filter = request.GET.get("name", "").strip()
     if status_filter and status_filter in TranscodeJob.Status.values:
         jobs = jobs.filter(status=status_filter)
     if source_filter:
         jobs = jobs.filter(source_id=source_filter)
-    if auto_generated_filter in {"0", "1"}:
-        jobs = jobs.filter(auto_generated=auto_generated_filter == "1")
-
+    if name_filter:
+        jobs = jobs.filter(media_file__file_name__icontains=name_filter)
     query = request.GET.copy()
     query.pop("page", None)
-    paginator = Paginator(jobs, 30)
-    page_obj = paginator.get_page(request.GET.get("page"))
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 
     context = {
-        "jobs": page_obj,
-        "page_obj": page_obj,
+        "jobs": jobs,
         "status_counts": status_counts,
         "filters": {
             "status": status_filter,
             "source": source_filter,
-            "auto_generated": auto_generated_filter,
         },
         "query_string": query.urlencode(),
         "sources": MediaSource.objects.order_by("name"),
-        "pending_jobs": jobs.filter(status=TranscodeJob.Status.PENDING),
-        "running_jobs": jobs.filter(status=TranscodeJob.Status.RUNNING),
-        "complete_jobs": jobs.filter(status=TranscodeJob.Status.COMPLETE),
-        "failed_jobs": jobs.filter(status=TranscodeJob.Status.FAILED),
+        "pending_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING),
+        "running_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.RUNNING),
+        "complete_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.COMPLETE),
+        "failed_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED),
     }
     return render(request, "core/queue.html", context)
 

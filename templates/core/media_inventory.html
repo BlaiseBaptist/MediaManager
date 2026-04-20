@@ -143,7 +143,7 @@
 				color: #344054;
 			}
 			.pill.discovered, .pill.transcode_pending { background: #fff7ed; color: #9a3412; }
-			.pill.ready { background: #ecfdf3; color: #027a48; }
+			.pill.complete { background: #ecfdf3; color: #027a48; }
 			.pill.transcoding { background: #eff6ff; color: #1d4ed8; }
 			.pill.failed, .pill.missing { background: #fef3f2; color: #b42318; }
 			.meta {
@@ -234,7 +234,8 @@
 						<a class="button secondary" href="{% url 'media_inventory' %}?stage=discovered">Discovered</a>
 						<a class="button secondary" href="{% url 'media_inventory' %}?stage=transcode_pending">Pending Transcodes</a>
 						<a class="button secondary" href="{% url 'media_inventory' %}?stage=transcoding">Transcoding</a>
-						<a class="button secondary" href="{% url 'media_inventory' %}?stage=ready">Ready</a>
+						<a class="button secondary" href="{% url 'media_inventory' %}?stage=complete">Complete</a>
+						<a class="button secondary" href="{% url 'media_inventory' %}?stage=missing">Missing</a>
 						<a class="button secondary" href="{% url 'media_inventory' %}?stage=failed">Failed</a>
 					</div>
 
@@ -243,7 +244,7 @@
 						<div class="stat"><strong>{{ counts.discovered }}</strong><div class="meta">Discovered</div></div>
 						<div class="stat"><strong>{{ counts.transcode_pending }}</strong><div class="meta">Transcode pending</div></div>
 						<div class="stat"><strong>{{ counts.transcoding }}</strong><div class="meta">Transcoding</div></div>
-						<div class="stat"><strong>{{ counts.ready }}</strong><div class="meta">Ready</div></div>
+						<div class="stat"><strong>{{ counts.complete }}</strong><div class="meta">Complete</div></div>
 						<div class="stat"><strong>{{ counts.failed }}</strong><div class="meta">Failed</div></div>
 						<div class="stat"><strong>{{ counts.missing }}</strong><div class="meta">Missing</div></div>
 					</div>

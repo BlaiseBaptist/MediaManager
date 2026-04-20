@@ -77,7 +77,7 @@
       }
       .filters-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
       }
       .stat {
@@ -283,15 +283,11 @@
                     {% endfor %}
                   </select>
                 </div>
-                <div>
-                  <label for="auto-generated-filter">Queue type</label>
-                  <select id="auto-generated-filter" name="auto_generated">
-                    <option value="">All jobs</option>
-                    <option value="1" {% if filters.auto_generated == "1" %}selected{% endif %}>Auto-generated</option>
-                    <option value="0" {% if filters.auto_generated == "0" %}selected{% endif %}>Manual</option>
-                  </select>
-                </div>
               </div>
+                <div>
+                <label for="name">Name</label>
+                 <input type="text" id="name" name="name">
+                </div>
               <div class="actions">
                 <button type="submit">Apply filters</button>
                 <a class="action-link secondary" href="{% url 'queue' %}">Clear</a>

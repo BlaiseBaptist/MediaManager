@@ -15,7 +15,7 @@ class MediaFile(models.Model):
         DISCOVERED = "discovered", "Discovered"
         TRANSCODE_PENDING = "transcode_pending", "Transcode pending"
         TRANSCODING = "transcoding", "Transcoding"
-        READY = "ready", "Ready"
+        COMPLETE = "complete", "Complete"
         FAILED = "failed", "Failed"
         MISSING = "missing", "Missing"
 
@@ -124,7 +124,6 @@ class TranscodeJob(models.Model):
     input_path = models.CharField(max_length=500, default="")
     command = models.TextField(default="")
     priority = models.PositiveSmallIntegerField(default=100, db_index=True)
-    auto_generated = models.BooleanField(default=False, db_index=True)
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
