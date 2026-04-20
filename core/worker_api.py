@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 from .library_sync import LIBRARY_ROOT
 import os
+
 BLOCKED_FFMPEG_FLAGS = {
     "-c",
     "-codec",
@@ -45,11 +46,11 @@ def _job_filename(job: TranscodeJob) -> str:
 
 
 def _job_input_url(request, job: TranscodeJob) -> str:
-    return job.input_path[len(str(LIBRARY_ROOT)):]
+    return job.input_path[len(str(LIBRARY_ROOT)) :]
 
 
 def _job_output_url(request, job: TranscodeJob) -> str:
-    return "/scratch/"+str(job.media_file.id)+".part"
+    return "/scratch/" + str(job.media_file.id) + ".part"
 
 
 def _request_json(request) -> dict[str, object]:
@@ -94,18 +95,19 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
 
 
 def _claim_next_job() -> TranscodeJob | None:
-    (TranscodeJob.objects
-     .filter(status=TranscodeJob.Status.RUNNING)
-     .filter(updated_at__lt=timezone.now() - timedelta(hours=12))
-     .update(status=TranscodeJob.Status.PENDING))
+    (
+        TranscodeJob.objects.filter(status=TranscodeJob.Status.RUNNING)
+        .filter(updated_at__lt=timezone.now() - timedelta(hours=12))
+        .update(status=TranscodeJob.Status.PENDING)
+    )
     with django.db.transaction.atomic():
         candidate = (
-            TranscodeJob.objects
-            .select_related("source", "media_file")
+            TranscodeJob.objects.select_related("source", "media_file")
             .filter(status=TranscodeJob.Status.PENDING)
             .order_by("priority", "media_file__size_bytes")
             .select_for_update()
-            .first())
+            .first()
+        )
         if candidate is None:
             return None
         candidate.status = TranscodeJob.Status.RUNNING
@@ -154,15 +156,14 @@ def worker_complete_job(request, job_id: int):
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id
     )
-    os.rename("/media/scratch/"+str(job.media_file.id)+".part", job.input_path)
+    os.rename("/media/scratch/" + str(job.media_file.id) + ".part", job.input_path)
     job.status = TranscodeJob.Status.COMPLETE
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:
         job.media_file.stage = MediaFile.Stage.READY
         job.media_file.is_present = True
-        job.media_file.save(
-            update_fields=["stage", "is_present", "updated_at"])
+        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
     return HttpResponse(status=204)
 
 
@@ -176,8 +177,7 @@ def worker_failed_job(request, job_id: int):
     )
     job.status = TranscodeJob.Status.FAILED
     job.error_message = (
-        str(payload.get("error", "")) if payload.get(
-            "error") is not None else ""
+        str(payload.get("error", "")) if payload.get("error") is not None else ""
     )
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:

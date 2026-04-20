@@ -60,7 +60,9 @@ def media_inventory(request):
             "transcoding": MediaFile.objects.filter(
                 stage=MediaFile.Stage.TRANSCODING
             ).count(),
-            "complete": MediaFile.objects.filter(stage=MediaFile.Stage.COMPLETE).count(),
+            "complete": MediaFile.objects.filter(
+                stage=MediaFile.Stage.COMPLETE
+            ).count(),
             "failed": MediaFile.objects.filter(stage=MediaFile.Stage.FAILED).count(),
             "missing": MediaFile.objects.filter(stage=MediaFile.Stage.MISSING).count(),
         },
@@ -78,8 +80,11 @@ def scan_library(request):
         else:
             messages.success(
                 request,
-                f"Scan complete: {stats.scanned} files scanned, {stats.complete} complete, {
-                    stats.needs_processing} need processing, {stats.missing} marked missing.",
+                f"Scan complete: {stats.scanned} files scanned, {
+                    stats.complete
+                } complete, {stats.needs_processing} need processing, {
+                    stats.missing
+                } marked missing.",
             )
     return redirect("media_inventory")
 
@@ -87,7 +92,8 @@ def scan_library(request):
 def reset_failed_jobs(request):
     if request.method == "POST":
         TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED).update(
-            status=TranscodeJob.Status.PENDING)
+            status=TranscodeJob.Status.PENDING
+        )
     return redirect("queue")
 
 
@@ -133,7 +139,9 @@ def queue(request):
         "sources": MediaSource.objects.order_by("name"),
         "pending_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING),
         "running_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.RUNNING),
-        "complete_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.COMPLETE),
+        "complete_jobs": TranscodeJob.objects.filter(
+            status=TranscodeJob.Status.COMPLETE
+        ),
         "failed_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED),
     }
     return render(request, "core/queue.html", context)
@@ -149,8 +157,7 @@ def update_job_status(request, job_id, status):
     if job.media_file_id:
         job.media_file.stage = media_stage_for_job_status(status)
         job.media_file.is_present = True
-        job.media_file.save(
-            update_fields=["stage", "is_present", "updated_at"])
+        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
     if status != TranscodeJob.Status.FAILED:
         job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
@@ -166,11 +173,9 @@ def requeue_job(request, job_id):
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:
-        job.media_file.stage = media_stage_for_job_status(
-            TranscodeJob.Status.PENDING)
+        job.media_file.stage = media_stage_for_job_status(TranscodeJob.Status.PENDING)
         job.media_file.is_present = True
-        job.media_file.save(
-            update_fields=["stage", "is_present", "updated_at"])
+        job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
     return _queue_redirect(request)
 
 

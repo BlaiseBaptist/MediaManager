@@ -122,8 +122,7 @@ def _upsert_transcode_job(media_file: MediaFile) -> TranscodeJob:
     job = (
         TranscodeJob.objects.filter(
             media_file=media_file,
-            status__in=[TranscodeJob.Status.PENDING,
-                        TranscodeJob.Status.RUNNING],
+            status__in=[TranscodeJob.Status.PENDING, TranscodeJob.Status.RUNNING],
         )
         .order_by("status", "-created_at")
         .first()
@@ -180,8 +179,7 @@ def _resolve_auto_generated_jobs(media_file: MediaFile, status: str) -> None:
 def _format_name(probe_data: dict) -> str:
     format_data = probe_data.get("format", {})
     return (
-        format_data.get("format_name") or format_data.get(
-            "format_long_name") or ""
+        format_data.get("format_name") or format_data.get("format_long_name") or ""
     ).strip()
 
 
@@ -203,10 +201,7 @@ def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
 def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool:
     format_name = _format_name(probe_data).lower()
     container_requirement = (
-        (
-            profile.target_container_contains
-            or TranscodeProfile.TARGET_CONTAINER
-        )
+        (profile.target_container_contains or TranscodeProfile.TARGET_CONTAINER)
         .strip()
         .lower()
     )
@@ -232,8 +227,7 @@ def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool
     target_subtitle_codecs = [
         codec.strip().lower()
         for codec in (
-            profile.target_subtitle_codecs
-            or TranscodeProfile.TARGET_SUBTITLE_CODECS
+            profile.target_subtitle_codecs or TranscodeProfile.TARGET_SUBTITLE_CODECS
         )
         if str(codec).strip()
     ]
@@ -306,8 +300,7 @@ def sync_media_library() -> ScanStats:
                 stats.failed += 1
                 raise exc
             except subprocess.CalledProcessError as exc:
-                metadata, _ = MediaMetadata.objects.get_or_create(
-                    media_file=media_file)
+                metadata, _ = MediaMetadata.objects.get_or_create(media_file=media_file)
                 metadata.extracted_by = "ffprobe"
                 metadata.raw_probe = {"error": exc.stderr or str(exc)}
                 metadata.save()
@@ -347,8 +340,7 @@ def sync_media_library() -> ScanStats:
         if media_file.absolute_path not in seen_paths:
             media_file.is_present = False
             media_file.stage = MediaFile.Stage.MISSING
-            media_file.save(
-                update_fields=["is_present", "stage", "updated_at"])
+            media_file.save(update_fields=["is_present", "stage", "updated_at"])
             stats.missing += 1
 
     return stats
@@ -398,8 +390,7 @@ def collect_metadata_for_media_file(
     probe_data = _probe_media_file(file_path)
     format_data = probe_data.get("format", {})
     container_format = (
-        format_data.get("format_long_name") or format_data.get(
-            "format_name") or ""
+        format_data.get("format_long_name") or format_data.get("format_name") or ""
     )
     metadata, _ = MediaMetadata.objects.get_or_create(media_file=media_file)
     metadata.container_format = container_format
@@ -409,8 +400,7 @@ def collect_metadata_for_media_file(
     metadata.video_codecs = _codec_names(probe_data, "video")
     metadata.audio_codecs = _codec_names(probe_data, "audio")
     metadata.subtitle_codecs = _codec_names(probe_data, "subtitle")
-    metadata.matches_target_profile = _matches_target_profile(
-        probe_data, profile)
+    metadata.matches_target_profile = _matches_target_profile(probe_data, profile)
     metadata.raw_probe = probe_data
     metadata.extracted_by = "ffprobe"
     metadata.save()

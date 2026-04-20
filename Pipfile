@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 python-lsp-server = {extras = ["all"], version = "*"}
 gunicorn = "*"
+ruff = "*"
+python-lsp-ruff = "*"
 
 [dev-packages]
 

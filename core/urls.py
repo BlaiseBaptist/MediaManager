@@ -35,8 +35,7 @@ urlpatterns = [
     ),
     path("reset-failed/", views.reset_failed_jobs, name="reset_failed_jobs"),
     path("delete-jobs/", views.delete_all_jobs, name="delete_all_jobs"),
-    path("delete-missing/", views.delete_missing_files,
-         name="delete_missing_files"),
+    path("delete-missing/", views.delete_missing_files, name="delete_missing_files"),
     path("queue/<int:job_id>/requeue/", views.requeue_job, name="requeue_job"),
     path("queue/<int:job_id>/delete/", views.delete_job, name="delete_job"),
 ]
