@@ -1,5 +1,6 @@
 from django.contrib import messages
-from django.core.paginator import Paginator
+
+# from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -39,15 +40,15 @@ def media_inventory(request):
     files = MediaFile.objects.select_related("source", "metadata_record").all()
     if stage and stage in MediaFile.Stage.values:
         files = files.filter(stage=stage)
-    paginator = Paginator(files, 50)
-    page_obj = paginator.get_page(request.GET.get("page"))
+    # paginator = Paginator(files, 50)
+    # page_obj = paginator.get_page(request.GET.get("page"))
     query = request.GET.copy()
     query.pop("page", None)
 
     context = {
         "library_root": LIBRARY_ROOT,
-        "media_files": page_obj,
-        "page_obj": page_obj,
+        "media_files": files,
+        "page_obj": files,
         "query_string": query.urlencode(),
         "counts": {
             "total": MediaFile.objects.count(),

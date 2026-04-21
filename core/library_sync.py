@@ -118,62 +118,47 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
     return media_file, created, changed
 
 
-def _upsert_transcode_job(media_file: MediaFile) -> TranscodeJob:
+def _upsert_transcode_job(media_file: MediaFile):
+    if media_file.stage == MediaFile.Stage.COMPLETE:
+        return
     job = (
         TranscodeJob.objects.filter(
             media_file=media_file,
-            status__in=[TranscodeJob.Status.PENDING, TranscodeJob.Status.RUNNING],
         )
         .order_by("status", "-created_at")
         .first()
     )
 
     if job is None:
-        return TranscodeJob.objects.create(
+        TranscodeJob.objects.create(
             source=media_file.source,
             media_file=media_file,
             input_path=media_file.absolute_path,
             command="",
             priority=100,
-            auto_generated=True,
             status=TranscodeJob.Status.PENDING,
         )
-
-    if not job.auto_generated:
-        return job
-
-    update_fields: list[str] = []
-    if job.source_id != media_file.source_id:
-        job.source = media_file.source
-        update_fields.append("source")
-    if job.input_path != media_file.absolute_path:
-        job.input_path = media_file.absolute_path
-        update_fields.append("input_path")
-    if job.status != TranscodeJob.Status.PENDING:
-        job.status = TranscodeJob.Status.PENDING
-        update_fields.append("status")
-    if job.error_message:
-        job.error_message = ""
-        update_fields.append("error_message")
-
-    if update_fields:
-        job.save(update_fields=[*update_fields, "updated_at"])
-
-    return job
-
-
-def _resolve_auto_generated_jobs(media_file: MediaFile, status: str) -> None:
-    job_status = {
-        MediaFile.Stage.COMPLETE: TranscodeJob.Status.COMPLETE,
-        MediaFile.Stage.FAILED: TranscodeJob.Status.FAILED,
-    }.get(status)
-    if job_status is None:
         return
 
-    TranscodeJob.objects.filter(media_file=media_file, auto_generated=True).update(
-        status=job_status,
-        updated_at=timezone.now(),
-    )
+    else:
+        update_fields: list[str] = []
+        if job.source_id != media_file.source_id:
+            job.source = media_file.source
+            update_fields.append("source")
+        if job.input_path != media_file.absolute_path:
+            job.input_path = media_file.absolute_path
+            update_fields.append("input_path")
+        if job.status != TranscodeJob.Status.PENDING:
+            job.status = TranscodeJob.Status.PENDING
+            update_fields.append("status")
+        if job.error_message:
+            job.error_message = ""
+            update_fields.append("error_message")
+
+        if update_fields:
+            job.save(update_fields=[*update_fields, "updated_at"])
+
+    return
 
 
 def _format_name(probe_data: dict) -> str:
@@ -321,10 +306,7 @@ def sync_media_library() -> ScanStats:
                 else MediaFile.Stage.TRANSCODE_PENDING
             )
             media_file.save(update_fields=["stage", "updated_at"])
-            if media_file.stage == MediaFile.Stage.TRANSCODE_PENDING:
-                _upsert_transcode_job(media_file)
-            else:
-                _resolve_auto_generated_jobs(media_file, media_file.stage)
+            _upsert_transcode_job(media_file)
             seen_paths.add(media_file.absolute_path)
             stats.scanned += 1
             if created:

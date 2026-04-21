@@ -108,16 +108,17 @@ def _claim_next_job() -> TranscodeJob | None:
             .select_for_update()
             .first()
         )
+
         if candidate is None:
             return None
+
         candidate.status = TranscodeJob.Status.RUNNING
         candidate.updated_at = timezone.now()
-
         candidate.media_file.stage = MediaFile.Stage.TRANSCODING
-        candidate.media_file.is_present = True
         candidate.media_file.updated_at = timezone.now()
         try:
             candidate.save()
+            candidate.media_file.save()
             return candidate
         except django.db.utils.OperationalError:
             return None
@@ -151,7 +152,6 @@ def worker_job_input(request, job_id: int):
 @csrf_exempt
 @require_GET
 def worker_complete_job(request, job_id: int):
-
     _request_json(request)
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id
@@ -161,7 +161,7 @@ def worker_complete_job(request, job_id: int):
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
     if job.media_file_id:
-        job.media_file.stage = MediaFile.Stage.READY
+        job.media_file.stage = MediaFile.Stage.COMPLETE
         job.media_file.is_present = True
         job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
     return HttpResponse(status=204)
