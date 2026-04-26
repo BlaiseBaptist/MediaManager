@@ -1,10 +1,9 @@
 from django.contrib import messages
 
-# from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-
+from django.http import HttpResponse
 from .library_sync import (
     LIBRARY_ROOT,
     media_stage_for_job_status,
@@ -40,8 +39,6 @@ def media_inventory(request):
     files = MediaFile.objects.select_related("source", "metadata_record").all()
     if stage and stage in MediaFile.Stage.values:
         files = files.filter(stage=stage)
-    # paginator = Paginator(files, 50)
-    # page_obj = paginator.get_page(request.GET.get("page"))
     query = request.GET.copy()
     query.pop("page", None)
 
@@ -101,14 +98,47 @@ def reset_failed_jobs(request):
 def delete_all_jobs(request):
     if request.method == "POST":
         TranscodeJob.objects.all().delete()
-    return scan_library(request)
+
+        pending_media = MediaFile.objects.filter(
+            stage__in=[
+                MediaFile.Stage.FAILED,
+                MediaFile.Stage.TRANSCODE_PENDING,
+                MediaFile.Stage.TRANSCODING,
+            ]
+        )
+        jobs_to_create = [
+            TranscodeJob(
+                source=media_file.source,
+                media_file=media_file,
+                input_path=media_file.absolute_path,
+                command="",
+                priority=100,
+                status=TranscodeJob.Status.PENDING,
+            )
+            for media_file in pending_media
+        ]
+        TranscodeJob.objects.bulk_create(jobs_to_create)
+        pending_media.update(stage=MediaFile.Stage.TRANSCODE_PENDING)
+
+    return redirect("queue")
 
 
 def delete_missing_files(request):
     if request.method == "POST":
-        MediaFile.objects.filter(stage=MediaFile.Stage.MISSING).delete()
-        MediaFile.objects.filter(stage=MediaFile.Stage.FAILED).delete()
-    return scan_library(request)
+        try:
+            deleted_count, details = MediaFile.objects.filter(
+                stage=MediaFile.Stage.MISSING
+            ).delete()
+        except FileNotFoundError as exc:
+            messages.error(request, str(exc))
+        else:
+            count = (
+                0
+                if details.get("core.MediaFile") is None
+                else details.get("core.MediaFile")
+            )
+            messages.success(request, f"Deleted {count} files")
+    return redirect("media_inventory")
 
 
 def queue(request):

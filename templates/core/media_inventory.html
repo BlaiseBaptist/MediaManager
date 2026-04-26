@@ -202,13 +202,8 @@
 			<div class="topbar">
 				<div>
 					<h1>Media Database</h1>
-					<div class="meta">Indexed from {{ library_root }}. This is the database view, not a file browser.</div>
 				</div>
 				<div class="toolbar" style="margin: 0;">
-	        <form action="{% url 'delete_missing_files' %}" method="POST">
-	            {% csrf_token %}
-	            <button type="submit">Delete All Missing</button>
-	        </form>
 					<a class="button secondary" href="{% url 'home' %}">Back home</a>
 				</div>
 			</div>
@@ -229,6 +224,10 @@
 						<form method="post" action="{% url 'scan_library' %}">
 							{% csrf_token %}
 							<button type="submit">Rescan Library</button>
+						</form>
+						<form action="{% url 'delete_missing_files' %}" method="POST">
+							{% csrf_token %}
+							<button type="submit">Delete All Missing</button>
 						</form>
 						<a class="button secondary" href="{% url 'media_inventory' %}">All</a>
 						<a class="button secondary" href="{% url 'media_inventory' %}?stage=discovered">Discovered</a>

@@ -260,7 +260,6 @@ def sync_media_library() -> ScanStats:
     stats = ScanStats()
     profile = TranscodeProfile.load()
     seen_paths: set[str] = set()
-
     for root_name in SCAN_ROOTS:
         root = (LIBRARY_ROOT / root_name).resolve()
         if not root.exists():
@@ -317,7 +316,6 @@ def sync_media_library() -> ScanStats:
                 stats.complete += 1
             else:
                 stats.needs_processing += 1
-
     for media_file in MediaFile.objects.filter(is_present=True):
         if media_file.absolute_path not in seen_paths:
             media_file.is_present = False
