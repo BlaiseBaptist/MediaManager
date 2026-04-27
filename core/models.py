@@ -130,6 +130,9 @@ class TranscodeJob(models.Model):
     error_message = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    worker = models.TextField(
+        default="",
+    )
 
     def __str__(self) -> str:
         return f"{self.source.name} - {self.input_path} ({self.status})"

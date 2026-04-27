@@ -234,7 +234,6 @@
       <div class="topbar">
         <div>
           <h1>Queue</h1>
-          <div class="meta">Track jobs from the browser and update their state as work moves.</div>
         </div>
         <div class="actions" style="margin: 0;">
         <form action="{% url 'reset_failed_jobs' %}" method="POST">
@@ -305,24 +304,21 @@
               {% for job in jobs %}
                 <article class="job">
                   <div class="job-head">
-                    <h3>{{ job.source.name }}: {{ job.media_file.file_name|default:job.input_path }}</h3>
+                    <h3>{{ job.media_file.file_name|default:job.input_path }}</h3>
                     <span class="pill {{ job.status }}">{{ job.get_status_display }}</span>
                   </div>
                   <div class="meta">
-                    Source: {{ job.source.path }} · Priority: {{ job.priority }} · Created: {{ job.created_at }}
-                    {% if job.auto_generated %}
-                      <br>Queue: auto-generated
-                    {% else %}
-                      <br>Queue: manual
-                    {% endif %}
+                    Priority: {{ job.priority }} · Created: {{ job.created_at }}
+                    {% if job.status != "pending"%}
+                       · Worker: {{ job.worker }}
+                    {%endif %}
                     {% if job.media_file %}
-                      <br>Media DB: {{ job.media_file.absolute_path }} · Stage: {{ job.media_file.get_stage_display }}
+                      <br> Source: {{ job.media_file.absolute_path }}
                       {% if job.media_file.metadata_record %}
                         <br>Container: {{ job.media_file.metadata_record.container_format|default:"-" }}
                       {% endif %}
                     {% endif %}
                   </div>
-                  <div class="command">{{ job.command }}</div>
                   {% if job.error_message %}
                     <div class="error">{{ job.error_message }}</div>
                   {% endif %}

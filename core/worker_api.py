@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 from .library_sync import LIBRARY_ROOT
-import os
+from .tasks import move_file_task
 
 BLOCKED_FFMPEG_FLAGS = {
     "-c",
@@ -94,7 +94,7 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
     return payload
 
 
-def _claim_next_job() -> TranscodeJob | None:
+def _claim_next_job(worker: str) -> TranscodeJob | None:
     (
         TranscodeJob.objects.filter(status=TranscodeJob.Status.RUNNING)
         .filter(updated_at__lt=timezone.now() - timedelta(hours=12))
@@ -113,6 +113,7 @@ def _claim_next_job() -> TranscodeJob | None:
             return None
 
         candidate.status = TranscodeJob.Status.RUNNING
+        candidate.worker = worker
         candidate.updated_at = timezone.now()
         candidate.media_file.stage = MediaFile.Stage.TRANSCODING
         candidate.media_file.updated_at = timezone.now()
@@ -127,7 +128,8 @@ def _claim_next_job() -> TranscodeJob | None:
 
 @require_GET
 def worker_next_job(request):
-    job = _claim_next_job()
+    worker = request.body.decode("utf-8").strip('"')
+    job = _claim_next_job(worker)
     if job is None:
         return HttpResponse(status=204)
 
@@ -156,7 +158,9 @@ def worker_complete_job(request, job_id: int):
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id
     )
-    os.rename("/media/scratch/" + str(job.media_file.id) + ".part", job.input_path)
+    move_file_task.enqueue(
+        "/media/scratch/" + str(job.media_file.id) + ".part", job.input_path
+    )
     job.status = TranscodeJob.Status.COMPLETE
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
@@ -170,7 +174,6 @@ def worker_complete_job(request, job_id: int):
 @csrf_exempt
 @require_GET
 def worker_failed_job(request, job_id: int):
-
     payload = _request_json(request)
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id

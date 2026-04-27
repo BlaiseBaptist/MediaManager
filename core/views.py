@@ -3,7 +3,6 @@ from django.contrib import messages
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.http import HttpResponse
 from .library_sync import (
     LIBRARY_ROOT,
     media_stage_for_job_status,
@@ -137,7 +136,7 @@ def delete_missing_files(request):
                 if details.get("core.MediaFile") is None
                 else details.get("core.MediaFile")
             )
-            messages.success(request, f"Deleted {count} files")
+            messages.success(request, f"Deleted {count} records")
     return redirect("media_inventory")
 
 
@@ -155,7 +154,6 @@ def queue(request):
     if name_filter:
         jobs = jobs.filter(media_file__file_name__icontains=name_filter)
     query = request.GET.copy()
-    query.pop("page", None)
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
 

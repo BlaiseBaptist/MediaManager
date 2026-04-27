@@ -7,7 +7,11 @@ urlpatterns = [
     path("queue/", views.queue, name="queue"),
     path("media/", views.media_inventory, name="media_inventory"),
     path("media/scan/", views.scan_library, name="scan_library"),
-    path("api/worker/jobs/next", worker_api.worker_next_job, name="worker_next_job"),
+    path(
+        "api/worker/jobs/next/",
+        worker_api.worker_next_job,
+        name="worker_next_job",
+    ),
     path(
         "api/media/jobs/<int:job_id>/input",
         worker_api.worker_job_input,
