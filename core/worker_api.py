@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 from .library_sync import LIBRARY_ROOT
-from .tasks import move_file_task
+import os
 
 BLOCKED_FFMPEG_FLAGS = {
     "-c",
@@ -88,8 +88,9 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
     }
     payload["transcode"] = {
         "quality": "HIGH",
-        "video_codec": profile.target_video_codecs[0],
-        "audio_codec": profile.target_audio_codecs[0],
+        "video_codec": profile.video_codecs[0],
+        "audio_codec": profile.audio_codecs[0],
+        "max_bitrate": profile.bitrates[0],
     }
     return payload
 
@@ -102,7 +103,7 @@ def _claim_next_job(worker: str) -> TranscodeJob | None:
     )
     with django.db.transaction.atomic():
         candidate = (
-            TranscodeJob.objects.select_related("source", "media_file")
+            TranscodeJob.objects.select_related("media_file")
             .filter(status=TranscodeJob.Status.PENDING)
             .order_by("priority", "media_file__size_bytes")
             .select_for_update()
@@ -158,8 +159,11 @@ def worker_complete_job(request, job_id: int):
     job = get_object_or_404(
         TranscodeJob.objects.select_related("media_file"), pk=job_id
     )
-    move_file_task.enqueue(
-        "/media/scratch/" + str(job.media_file.id) + ".part", job.input_path
+
+    os.rename(
+        # move_file_task.enqueue(
+        "/media/scratch/" + str(job.media_file.id) + ".part",
+        job.input_path,
     )
     job.status = TranscodeJob.Status.COMPLETE
     job.error_message = ""

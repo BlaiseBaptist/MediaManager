@@ -6,7 +6,8 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("queue/", views.queue, name="queue"),
     path("media/", views.media_inventory, name="media_inventory"),
-    path("media/scan/", views.media_sync_endpoint, name="scan_library"),
+    path("media/rescan/", views.rescan_libary, name="scan_library"),
+    path("api/arr", views.arr_webhook, name="arr_update"),
     path(
         "api/worker/jobs/next/",
         worker_api.worker_next_job,

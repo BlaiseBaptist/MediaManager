@@ -69,40 +69,50 @@ class MediaMetadata(models.Model):
     video_codecs = models.JSONField(default=list, blank=True)
     audio_codecs = models.JSONField(default=list, blank=True)
     subtitle_codecs = models.JSONField(default=list, blank=True)
-    matches_target_profile = models.BooleanField(default=False, db_index=True)
     raw_probe = models.JSONField(default=dict, blank=True)
     extracted_by = models.CharField(max_length=120, blank=True, default="")
     probed_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def matches_target_profile(self) -> bool:
+        profile = TranscodeProfile.load()
+        if self.container_format.lower() != profile.container.lower():
+            return False
+        if not all(codec in profile.video_codecs for codec in self.video_codecs):
+            return False
+        if not all(codec in profile.audio_codecs for codec in self.audio_codecs):
+            return False
+        if not all(codec in profile.subtitle_codecs for codec in self.subtitle_codecs):
+            return False
+        return True
+
     def __str__(self) -> str:
         return f"Metadata for {self.media_file.absolute_path}"
 
 
 class TranscodeProfile(models.Model):
-    TARGET_CONTAINER = "matroska"
-    TARGET_VIDEO_CODECS = ["av1"]
-    TARGET_AUDIO_CODECS = ["opus"]
-    TARGET_SUBTITLE_CODECS: list[str] = []
-
-    target_container_contains = models.CharField(
-        max_length=120, blank=True, default=TARGET_CONTAINER
-    )
-    target_video_codecs = models.JSONField(default=list, blank=True)
-    target_audio_codecs = models.JSONField(default=list, blank=True)
-    target_subtitle_codecs = models.JSONField(default=list, blank=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    CONTAINER = "matroska"
+    VIDEO_CODECS = ["av1"]
+    AUDIO_CODECS = ["opus"]
+    SUBTITLE_CODECS: list[str] = []
+    BITRATES = ["100M"]
+    container = models.CharField(max_length=120, blank=True, default=CONTAINER)
+    video_codecs = models.JSONField(default=list, blank=True)
+    audio_codecs = models.JSONField(default=list, blank=True)
+    subtitle_codecs = models.JSONField(default=list, blank=True)
+    bitrates = models.JSONField(default=list, blank=True)
 
     @classmethod
     def load(cls) -> "TranscodeProfile":
         profile, _ = cls.objects.get_or_create(pk=1)
         fixed_values = {
-            "target_container_contains": cls.TARGET_CONTAINER,
-            "target_video_codecs": cls.TARGET_VIDEO_CODECS,
-            "target_audio_codecs": cls.TARGET_AUDIO_CODECS,
-            "target_subtitle_codecs": cls.TARGET_SUBTITLE_CODECS,
+            "container": cls.CONTAINER,
+            "video_codecs": cls.VIDEO_CODECS,
+            "audio_codecs": cls.AUDIO_CODECS,
+            "subtitle_codecs": cls.SUBTITLE_CODECS,
+            "bitrates": cls.BITRATES,
         }
         changed = False
         for field_name, expected in fixed_values.items():
@@ -110,7 +120,7 @@ class TranscodeProfile(models.Model):
                 setattr(profile, field_name, expected)
                 changed = True
         if changed:
-            profile.save(update_fields=[*fixed_values.keys(), "updated_at"])
+            profile.save(update_fields=[*fixed_values.keys()])
         return profile
 
     def __str__(self) -> str:
@@ -124,6 +134,9 @@ class TranscodeJob(models.Model):
         COMPLETE = "complete", "Complete"
         FAILED = "failed", "Failed"
 
+    transcode_profile = models.ForeignKey(
+        TranscodeProfile, on_delete=models.PROTECT, default=TranscodeProfile.load
+    )
     media_file = models.ForeignKey(
         MediaFile, on_delete=models.CASCADE, related_name="jobs", null=True, blank=True
     )

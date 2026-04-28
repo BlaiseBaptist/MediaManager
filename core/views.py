@@ -1,24 +1,23 @@
-import json
-
 from django.contrib import messages
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
 from .library_sync import (
     LIBRARY_ROOT,
     media_stage_for_job_status,
     sync_radarr,
     sync_sonarr,
+    update_file,
     ScanStats,
 )
 from .models import MediaFile, MediaSource, TranscodeJob, DataSource
+import shutil
 
-
-def _queue_redirect(request):
-    return redirect(request.POST.get("next") or reverse("queue"))
+from pathlib import Path
 
 
 def home(request):
@@ -73,60 +72,24 @@ def media_inventory(request):
     return render(request, "core/media_inventory.html", context)
 
 
-@csrf_exempt
-def media_sync_endpoint(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            data = request.POST.dict()
-
-        event_type = data.get("eventType", "")
-
-        # Handle "Test" buttons from *arr settings
-        if event_type == "Test":
-            return JsonResponse({"status": "ok", "message": "Connection successful"})
-
-        is_radarr = "movie" in data or "remoteMovie" in data
-        is_sonarr = "series" in data or "episodes" in data
-
-        stats = ScanStats()
-        if is_radarr:
-            radarr_sources = DataSource.objects.filter(name__icontains="radarr")
-            for source in radarr_sources:
-                if source.api_key:
-                    stats += sync_radarr(source)
-        elif is_sonarr:
-            sonarr_sources = DataSource.objects.filter(name__icontains="sonarr")
-            for source in sonarr_sources:
-                if source.api_key:
-                    stats += sync_sonarr(source)
-        else:
-            stats = run_full_sync()
-        messages.success(
-            request,
-            f"Scan complete: {stats.scanned} files scanned, {stats.complete} complete, {
-                stats.needs_processing
-            } need processing, {stats.missing} marked missing.",
-        )
-        return redirect("media_inventory")
-
-    return JsonResponse({"error": "Method not allowed"}, status=405)
-    messages.error(request, str("Method not allowed"))
-    return redirect("media_inventory")
-
-
-def run_full_sync():
-    total_stats = ScanStats()
+@require_POST
+def rescan_libary(request):
+    stats = ScanStats()
     for source in DataSource.objects.all():
         if "radarr" in source.name.lower():
-            total_stats += sync_radarr(source)
+            stats += sync_radarr(source)
         elif "sonarr" in source.name.lower():
-            total_stats += sync_sonarr(source)
-    MediaFile.objects.filter(data_source=DataSource.objects.get(name="Unknown")).update(
-        stage=MediaFile.Stage.MISSING
+            stats += sync_sonarr(source)
+    stats.missing += MediaFile.objects.filter(
+        data_source=DataSource.objects.get(name="Unknown")
+    ).update(stage=MediaFile.Stage.MISSING)
+    messages.success(
+        request,
+        f"Scan complete: {stats.scanned} files scanned, {stats.complete} complete, {
+            stats.needs_processing
+        } need processing, {stats.missing} marked missing.",
     )
-    return total_stats
+    return render(request, "core/media_inven", messages)
 
 
 def reset_failed_jobs(request):
@@ -143,22 +106,57 @@ def delete_all_jobs(request):
     return redirect("queue")
 
 
+@require_POST
 def delete_missing_files(request):
-    if request.method == "POST":
+    rescan_libary()
+    missing_files = MediaFile.objects.filter(stage=MediaFile.Stage.MISSING)
+    stats = ScanStats()
+    for file in missing_files:
         try:
-            deleted_count, details = MediaFile.objects.filter(
-                stage=MediaFile.Stage.MISSING
-            ).delete()
-        except FileNotFoundError as exc:
-            messages.error(request, str(exc))
-        else:
-            count = (
-                0
-                if details.get("core.MediaFile") is None
-                else details.get("core.MediaFile")
-            )
-            messages.success(request, f"Deleted {count} records")
+            shutil.move(file.absolute_path, "/media/spare_files/" + file.relative_path)
+            stats.complete += 1
+        except Exception:
+            stats.failed += 1
+        finally:
+            file.delete()
     return redirect("media_inventory")
+
+
+@require_POST
+@csrf_exempt
+def arr_webhook(request):
+    try:
+        data = json.loads(request.body)
+        event_type = data.get("eventType")
+
+        if event_type == "Test":
+            return JsonResponse({"status": "ok"})
+
+        remote_path = (
+            data.get("movieFile", {}).get("path")
+            or data.get("episodeFile", {}).get("path")
+            or data.get("path")
+        )
+
+        if not remote_path:
+            return JsonResponse(
+                {"status": "skipped", "message": "No path in payload"}, status=200
+            )
+        source_name = (
+            "Sonarr" if "series" in data else "Radarr" if "movie" in data else "Unknown"
+        )
+        data_source, _ = DataSource.objects.get_or_create(
+            name=source_name,
+            defaults={
+                "location": request.build_absolute_uri("/")
+                if not data.get("instanceName")
+                else "",
+            },
+        )
+        file_path = Path(remote_path).resolve()
+        update_file(file_path)
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
 
 
 def queue(request):

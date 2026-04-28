@@ -73,7 +73,6 @@ class MediaMetadataAdmin(admin.ModelAdmin):
         "updated_at",
     )
     list_filter = (
-        "matches_target_profile",
         "probed_at",
         "created_at",
         "updated_at",
@@ -86,15 +85,13 @@ class MediaMetadataAdmin(admin.ModelAdmin):
 class TranscodeProfileAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "target_container_contains",
-        "target_video_codecs",
-        "target_audio_codecs",
-        "target_subtitle_codecs",
-        "updated_at",
-        "created_at",
+        "container",
+        "video_codecs",
+        "audio_codecs",
+        "subtitle_codecs",
+        "bitrates",
     )
-    list_filter = ("updated_at", "created_at")
-    date_hierarchy = "created_at"
+    list_filter = ("container", "video_codecs", "audio_codecs", "bitrates")
 
 
 @admin.register(TranscodeJob)

@@ -131,7 +131,7 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
     return media_file, created, changed
 
 
-def _try_probe(file_path: Path, data_source: DataSource) -> ScanStats:
+def update_file(file_path: Path, data_source: DataSource) -> ScanStats:
     stats = ScanStats()
     media_file, created, changed = _scan_file(file_path)
     profile = TranscodeProfile.load()
@@ -242,77 +242,77 @@ def _stream_codecs(probe_data: dict, codec_type: str) -> list[str]:
     return codecs
 
 
-def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool:
-    format_name = _format_name(probe_data).lower()
-    container_requirement = (
-        (profile.target_container_contains or TranscodeProfile.TARGET_CONTAINER)
-        .strip()
-        .lower()
-    )
-    container_ok = container_requirement in format_name
-    video_codecs = _stream_codecs(probe_data, "video")
-    audio_codecs = _stream_codecs(probe_data, "audio")
-    subtitle_codecs = _stream_codecs(probe_data, "subtitle")
+# def _matches_target_profile(probe_data: dict, profile: TranscodeProfile) -> bool:
+#     format_name = _format_name(probe_data).lower()
+#     container_requirement = (
+#         (profile.target_container_contains or TranscodeProfile.TARGET_CONTAINER)
+#         .strip()
+#         .lower()
+#     )
+#     container_ok = container_requirement in format_name
+#     video_codecs = _stream_codecs(probe_data, "video")
+#     audio_codecs = _stream_codecs(probe_data, "audio")
+#     subtitle_codecs = _stream_codecs(probe_data, "subtitle")
 
-    target_video_codecs = [
-        codec.strip().lower()
-        for codec in (
-            profile.target_video_codecs or TranscodeProfile.TARGET_VIDEO_CODECS
-        )
-        if str(codec).strip()
-    ]
-    target_audio_codecs = [
-        codec.strip().lower()
-        for codec in (
-            profile.target_audio_codecs or TranscodeProfile.TARGET_AUDIO_CODECS
-        )
-        if str(codec).strip()
-    ]
-    target_subtitle_codecs = [
-        codec.strip().lower()
-        for codec in (
-            profile.target_subtitle_codecs or TranscodeProfile.TARGET_SUBTITLE_CODECS
-        )
-        if str(codec).strip()
-    ]
+#     target_video_codecs = [
+#         codec.strip().lower()
+#         for codec in (
+#             profile.target_video_codecs or TranscodeProfile.TARGET_VIDEO_CODECS
+#         )
+#         if str(codec).strip()
+#     ]
+#     target_audio_codecs = [
+#         codec.strip().lower()
+#         for codec in (
+#             profile.target_audio_codecs or TranscodeProfile.TARGET_AUDIO_CODECS
+#         )
+#         if str(codec).strip()
+#     ]
+#     target_subtitle_codecs = [
+#         codec.strip().lower()
+#         for codec in (
+#             profile.target_subtitle_codecs or TranscodeProfile.TARGET_SUBTITLE_CODECS
+#         )
+#         if str(codec).strip()
+#     ]
 
-    video_ok = bool(video_codecs) and all(
-        codec in target_video_codecs for codec in video_codecs
-    )
-    audio_ok = bool(audio_codecs) and all(
-        codec in target_audio_codecs for codec in audio_codecs
-    )
-    subtitle_ok = not target_subtitle_codecs or (
-        bool(subtitle_codecs)
-        and all(codec in target_subtitle_codecs for codec in subtitle_codecs)
-    )
-    return container_ok and video_ok and audio_ok and subtitle_ok
+#     video_ok = bool(video_codecs) and all(
+#         codec in target_video_codecs for codec in video_codecs
+#     )
+#     audio_ok = bool(audio_codecs) and all(
+#         codec in target_audio_codecs for codec in audio_codecs
+#     )
+#     subtitle_ok = not target_subtitle_codecs or (
+#         bool(subtitle_codecs)
+#         and all(codec in target_subtitle_codecs for codec in subtitle_codecs)
+#     )
+#     return container_ok and video_ok and audio_ok and subtitle_ok
 
 
-def _metadata_matches_target_profile(
-    metadata: MediaMetadata, profile: TranscodeProfile
-) -> bool:
-    probe_data = {
-        "format": {
-            "format_name": metadata.container_format,
-            "format_long_name": metadata.container_format,
-        },
-        "streams": [
-            *[
-                {"codec_type": "video", "codec_name": codec}
-                for codec in (metadata.video_codecs or [])
-            ],
-            *[
-                {"codec_type": "audio", "codec_name": codec}
-                for codec in (metadata.audio_codecs or [])
-            ],
-            *[
-                {"codec_type": "subtitle", "codec_name": codec}
-                for codec in (metadata.subtitle_codecs or [])
-            ],
-        ],
-    }
-    return _matches_target_profile(probe_data, profile)
+# def _metadata_matches_target_profile(
+#     metadata: MediaMetadata, profile: TranscodeProfile
+# ) -> bool:
+#     probe_data = {
+#         "format": {
+#             "format_name": metadata.container_format,
+#             "format_long_name": metadata.container_format,
+#         },
+#         "streams": [
+#             *[
+#                 {"codec_type": "video", "codec_name": codec}
+#                 for codec in (metadata.video_codecs or [])
+#             ],
+#             *[
+#                 {"codec_type": "audio", "codec_name": codec}
+#                 for codec in (metadata.audio_codecs or [])
+#             ],
+#             *[
+#                 {"codec_type": "subtitle", "codec_name": codec}
+#                 for codec in (metadata.subtitle_codecs or [])
+#             ],
+#         ],
+#     }
+#     return _matches_target_profile(probe_data, profile)
 
 
 def _probe_media_file(file_path: Path) -> dict:
@@ -369,7 +369,6 @@ def collect_metadata_for_media_file(
     metadata.video_codecs = _codec_names(probe_data, "video")
     metadata.audio_codecs = _codec_names(probe_data, "audio")
     metadata.subtitle_codecs = _codec_names(probe_data, "subtitle")
-    metadata.matches_target_profile = _matches_target_profile(probe_data, profile)
     metadata.raw_probe = probe_data
     metadata.extracted_by = "ffprobe"
     metadata.save()
@@ -398,19 +397,16 @@ def sync_radarr(source: DataSource) -> ScanStats:
         )
         response.raise_for_status()
         movies = response.json()
-    except Exception as e:
-        print("Radarr:", e)
+    finally:
+        for movie in movies:
+            file_info = movie.get("movieFile")
+            if not file_info:
+                continue
+
+            file_path = Path(file_info["path"])
+            stats += update_file(file_path, source)
+
         return stats
-
-    for movie in movies:
-        file_info = movie.get("movieFile")
-        if not file_info:
-            continue
-
-        file_path = Path(file_info["path"])
-        stats += _try_probe(file_path, source)
-
-    return stats
 
 
 def sync_sonarr(source: DataSource) -> ScanStats:
@@ -436,7 +432,6 @@ def sync_sonarr(source: DataSource) -> ScanStats:
 
             for ef in file_res.json():
                 file_path = Path(ef["path"])
-                stats += _try_probe(file_path, source)
-    except Exception:
+                stats += update_file(file_path, source)
+    finally:
         return stats
-    return stats

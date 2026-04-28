@@ -1,7 +1,7 @@
 from django.tasks import task
-import shutil
+import os
 
 
 @task
 def move_file_task(source, target):
-    shutil.move(source, target)
+    os.rename(source, target)
