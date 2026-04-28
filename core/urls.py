@@ -6,7 +6,7 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("queue/", views.queue, name="queue"),
     path("media/", views.media_inventory, name="media_inventory"),
-    path("media/scan/", views.scan_library, name="scan_library"),
+    path("media/scan/", views.media_sync_endpoint, name="scan_library"),
     path(
         "api/worker/jobs/next/",
         worker_api.worker_next_job,

@@ -10,6 +10,12 @@ class MediaSource(models.Model):
         return self.name
 
 
+class DataSource(models.Model):
+    name = models.CharField(max_length=200)
+    location = models.URLField(blank=True)
+    api_key = models.CharField(max_length=100, blank=True, default="")
+
+
 class MediaFile(models.Model):
     class Stage(models.TextChoices):
         DISCOVERED = "discovered", "Discovered"
@@ -21,6 +27,9 @@ class MediaFile(models.Model):
 
     source = models.ForeignKey(
         MediaSource, on_delete=models.CASCADE, related_name="media_files"
+    )
+    data_source = models.ForeignKey(
+        DataSource, on_delete=models.PROTECT, null=True, blank=True
     )
     absolute_path = models.CharField(max_length=600, unique=True)
     relative_path = models.CharField(max_length=500)
@@ -115,9 +124,6 @@ class TranscodeJob(models.Model):
         COMPLETE = "complete", "Complete"
         FAILED = "failed", "Failed"
 
-    source = models.ForeignKey(
-        MediaSource, on_delete=models.CASCADE, related_name="jobs"
-    )
     media_file = models.ForeignKey(
         MediaFile, on_delete=models.CASCADE, related_name="jobs", null=True, blank=True
     )
@@ -135,7 +141,7 @@ class TranscodeJob(models.Model):
     )
 
     def __str__(self) -> str:
-        return f"{self.source.name} - {self.input_path} ({self.status})"
+        return f"{self.media_file.source.name} - {self.input_path} ({self.status})"
 
     class Meta:
         ordering = ["status", "priority", "-created_at"]

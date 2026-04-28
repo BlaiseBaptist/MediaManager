@@ -9,13 +9,14 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.utils import timezone
-
+import requests
 from .models import (
     MediaFile,
     MediaMetadata,
     MediaSource,
     TranscodeJob,
     TranscodeProfile,
+    DataSource,
 )
 
 LIBRARY_ROOT = Path("/media").resolve()
@@ -42,6 +43,17 @@ class ScanStats:
     complete: int = 0
     needs_processing: int = 0
     failed: int = 0
+
+    def __add__(self, other: ScanStats):
+        return ScanStats(
+            self.scanned + other.scanned,
+            self.created + other.created,
+            self.updated + other.updated,
+            self.missing + other.missing,
+            self.complete + other.complete,
+            self.needs_processing + other.needs_processing,
+            self.failed + other.failed,
+        )
 
 
 def _media_source_for(path: Path) -> MediaSource:
@@ -115,7 +127,59 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
                 "updated_at",
             ]
         )
+
     return media_file, created, changed
+
+
+def _try_probe(file_path: Path, data_source: DataSource) -> ScanStats:
+    stats = ScanStats()
+    media_file, created, changed = _scan_file(file_path)
+    profile = TranscodeProfile.load()
+    try:
+        metadata = media_file.metadata_record
+    except MediaMetadata.DoesNotExist:
+        metadata = None
+    should_probe = created or changed or metadata is None
+    try:
+        if should_probe:
+            metadata = collect_metadata_for_media_file(media_file, profile=profile)
+    except FileNotFoundError as exc:
+        media_file.stage = MediaFile.Stage.FAILED
+        media_file.save(update_fields=["stage", "updated_at"])
+        stats.failed += 1
+        raise exc
+    except subprocess.CalledProcessError as exc:
+        metadata, _ = MediaMetadata.objects.get_or_create(media_file=media_file)
+        metadata.extracted_by = "ffprobe"
+        metadata.raw_probe = {"error": exc.stderr or str(exc)}
+        metadata.save()
+        media_file.stage = MediaFile.Stage.FAILED
+        media_file.save(update_fields=["stage", "updated_at"])
+        stats.failed += 1
+        stats.scanned += 1
+        if created:
+            stats.created += 1
+        else:
+            stats.updated += 1
+        return stats
+    media_file.stage = (
+        MediaFile.Stage.COMPLETE
+        if metadata.matches_target_profile
+        else MediaFile.Stage.TRANSCODE_PENDING
+    )
+    media_file.data_source = data_source
+    media_file.save(update_fields=["stage", "updated_at", "source", "data_source"])
+    _upsert_transcode_job(media_file)
+    stats.scanned += 1
+    if created:
+        stats.created += 1
+    else:
+        stats.updated += 1
+    if media_file.stage == MediaFile.Stage.COMPLETE:
+        stats.complete += 1
+    else:
+        stats.needs_processing += 1
+    return stats
 
 
 def _upsert_transcode_job(media_file: MediaFile):
@@ -131,7 +195,6 @@ def _upsert_transcode_job(media_file: MediaFile):
 
     if job is None:
         TranscodeJob.objects.create(
-            source=media_file.source,
             media_file=media_file,
             input_path=media_file.absolute_path,
             command="",
@@ -141,10 +204,7 @@ def _upsert_transcode_job(media_file: MediaFile):
         return
 
     else:
-        update_fields: list[str] = []
-        if job.source_id != media_file.source_id:
-            job.source = media_file.source
-            update_fields.append("source")
+        update_fields: list[str] = ["media_file"]
         if job.input_path != media_file.absolute_path:
             job.input_path = media_file.absolute_path
             update_fields.append("input_path")
@@ -154,10 +214,9 @@ def _upsert_transcode_job(media_file: MediaFile):
         if job.error_message:
             job.error_message = ""
             update_fields.append("error_message")
-
+        job.media_file = media_file
         if update_fields:
             job.save(update_fields=[*update_fields, "updated_at"])
-
     return
 
 
@@ -256,76 +315,6 @@ def _metadata_matches_target_profile(
     return _matches_target_profile(probe_data, profile)
 
 
-def sync_media_library() -> ScanStats:
-    stats = ScanStats()
-    profile = TranscodeProfile.load()
-    seen_paths: set[str] = set()
-    for root_name in SCAN_ROOTS:
-        root = (LIBRARY_ROOT / root_name).resolve()
-        if not root.exists():
-            continue
-        _media_source_for(root)
-        for file_path in _iter_media_files(root):
-            media_file, created, changed = _scan_file(file_path)
-            try:
-                metadata = media_file.metadata_record
-            except MediaMetadata.DoesNotExist:
-                metadata = None
-
-            should_probe = created or changed or metadata is None
-            try:
-                if should_probe:
-                    metadata = collect_metadata_for_media_file(
-                        media_file, profile=profile
-                    )
-            except FileNotFoundError as exc:
-                media_file.stage = MediaFile.Stage.FAILED
-                media_file.save(update_fields=["stage", "updated_at"])
-                stats.failed += 1
-                raise exc
-            except subprocess.CalledProcessError as exc:
-                metadata, _ = MediaMetadata.objects.get_or_create(media_file=media_file)
-                metadata.extracted_by = "ffprobe"
-                metadata.raw_probe = {"error": exc.stderr or str(exc)}
-                metadata.save()
-                media_file.stage = MediaFile.Stage.FAILED
-                media_file.save(update_fields=["stage", "updated_at"])
-                stats.failed += 1
-                seen_paths.add(media_file.absolute_path)
-                stats.scanned += 1
-                if created:
-                    stats.created += 1
-                else:
-                    stats.updated += 1
-                continue
-
-            media_file.stage = (
-                MediaFile.Stage.COMPLETE
-                if metadata.matches_target_profile
-                else MediaFile.Stage.TRANSCODE_PENDING
-            )
-            media_file.save(update_fields=["stage", "updated_at"])
-            _upsert_transcode_job(media_file)
-            seen_paths.add(media_file.absolute_path)
-            stats.scanned += 1
-            if created:
-                stats.created += 1
-            else:
-                stats.updated += 1
-            if media_file.stage == MediaFile.Stage.COMPLETE:
-                stats.complete += 1
-            else:
-                stats.needs_processing += 1
-    for media_file in MediaFile.objects.filter(is_present=True):
-        if media_file.absolute_path not in seen_paths:
-            media_file.is_present = False
-            media_file.stage = MediaFile.Stage.MISSING
-            media_file.save(update_fields=["is_present", "stage", "updated_at"])
-            stats.missing += 1
-
-    return stats
-
-
 def _probe_media_file(file_path: Path) -> dict:
     ffprobe = shutil.which("ffprobe")
     if not ffprobe:
@@ -395,3 +384,59 @@ def media_stage_for_job_status(status: str) -> str:
         "failed": MediaFile.Stage.FAILED,
     }
     return mapping.get(status, MediaFile.Stage.DISCOVERED)
+
+
+def sync_radarr(source: DataSource) -> ScanStats:
+    stats = ScanStats()
+    headers = {"X-Api-Key": source.api_key}
+    MediaFile.objects.filter(data_source=source).update(
+        data_source=DataSource.objects.get(name="Unknown")
+    )
+    try:
+        response = requests.get(
+            f"{source.location.rstrip('/')}/api/v3/movie", headers=headers, timeout=60
+        )
+        response.raise_for_status()
+        movies = response.json()
+    except Exception as e:
+        print("Radarr:", e)
+        return stats
+
+    for movie in movies:
+        file_info = movie.get("movieFile")
+        if not file_info:
+            continue
+
+        file_path = Path(file_info["path"])
+        stats += _try_probe(file_path, source)
+
+    return stats
+
+
+def sync_sonarr(source: DataSource) -> ScanStats:
+    stats = ScanStats()
+    headers = {"X-Api-Key": source.api_key}
+    MediaFile.objects.filter(data_source=source).update(
+        data_source=DataSource.objects.get(name="Unknown")
+    )
+    try:
+        series_res = requests.get(
+            f"{source.location.rstrip('/')}/api/v3/series", headers=headers
+        )
+        series_res.raise_for_status()
+        series_list = series_res.json()
+        for series in series_list:
+            file_res = requests.get(
+                f"{source.location.rstrip('/')}/api/v3/episodefile",
+                params={"seriesId": series["id"]},
+                headers=headers,
+            )
+            if file_res.status_code != 200:
+                continue
+
+            for ef in file_res.json():
+                file_path = Path(ef["path"])
+                stats += _try_probe(file_path, source)
+    except Exception:
+        return stats
+    return stats

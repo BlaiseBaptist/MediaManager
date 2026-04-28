@@ -1,14 +1,20 @@
-from django.contrib import messages
+import json
 
+from django.contrib import messages
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
 from .library_sync import (
     LIBRARY_ROOT,
     media_stage_for_job_status,
-    sync_media_library,
+    sync_radarr,
+    sync_sonarr,
+    ScanStats,
 )
-from .models import MediaFile, MediaSource, TranscodeJob
+from .models import MediaFile, MediaSource, TranscodeJob, DataSource
 
 
 def _queue_redirect(request):
@@ -39,7 +45,6 @@ def media_inventory(request):
     if stage and stage in MediaFile.Stage.values:
         files = files.filter(stage=stage)
     query = request.GET.copy()
-    query.pop("page", None)
 
     context = {
         "library_root": LIBRARY_ROOT,
@@ -68,22 +73,60 @@ def media_inventory(request):
     return render(request, "core/media_inventory.html", context)
 
 
-def scan_library(request):
+@csrf_exempt
+def media_sync_endpoint(request):
     if request.method == "POST":
         try:
-            stats = sync_media_library()
-        except FileNotFoundError as exc:
-            messages.error(request, str(exc))
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            data = request.POST.dict()
+
+        event_type = data.get("eventType", "")
+
+        # Handle "Test" buttons from *arr settings
+        if event_type == "Test":
+            return JsonResponse({"status": "ok", "message": "Connection successful"})
+
+        is_radarr = "movie" in data or "remoteMovie" in data
+        is_sonarr = "series" in data or "episodes" in data
+
+        stats = ScanStats()
+        if is_radarr:
+            radarr_sources = DataSource.objects.filter(name__icontains="radarr")
+            for source in radarr_sources:
+                if source.api_key:
+                    stats += sync_radarr(source)
+        elif is_sonarr:
+            sonarr_sources = DataSource.objects.filter(name__icontains="sonarr")
+            for source in sonarr_sources:
+                if source.api_key:
+                    stats += sync_sonarr(source)
         else:
-            messages.success(
-                request,
-                f"Scan complete: {stats.scanned} files scanned, {
-                    stats.complete
-                } complete, {stats.needs_processing} need processing, {
-                    stats.missing
-                } marked missing.",
-            )
+            stats = run_full_sync()
+        messages.success(
+            request,
+            f"Scan complete: {stats.scanned} files scanned, {stats.complete} complete, {
+                stats.needs_processing
+            } need processing, {stats.missing} marked missing.",
+        )
+        return redirect("media_inventory")
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
+    messages.error(request, str("Method not allowed"))
     return redirect("media_inventory")
+
+
+def run_full_sync():
+    total_stats = ScanStats()
+    for source in DataSource.objects.all():
+        if "radarr" in source.name.lower():
+            total_stats += sync_radarr(source)
+        elif "sonarr" in source.name.lower():
+            total_stats += sync_sonarr(source)
+    MediaFile.objects.filter(data_source=DataSource.objects.get(name="Unknown")).update(
+        stage=MediaFile.Stage.MISSING
+    )
+    return total_stats
 
 
 def reset_failed_jobs(request):
@@ -97,28 +140,6 @@ def reset_failed_jobs(request):
 def delete_all_jobs(request):
     if request.method == "POST":
         TranscodeJob.objects.all().delete()
-
-        pending_media = MediaFile.objects.filter(
-            stage__in=[
-                MediaFile.Stage.FAILED,
-                MediaFile.Stage.TRANSCODE_PENDING,
-                MediaFile.Stage.TRANSCODING,
-            ]
-        )
-        jobs_to_create = [
-            TranscodeJob(
-                source=media_file.source,
-                media_file=media_file,
-                input_path=media_file.absolute_path,
-                command="",
-                priority=100,
-                status=TranscodeJob.Status.PENDING,
-            )
-            for media_file in pending_media
-        ]
-        TranscodeJob.objects.bulk_create(jobs_to_create)
-        pending_media.update(stage=MediaFile.Stage.TRANSCODE_PENDING)
-
     return redirect("queue")
 
 
@@ -142,30 +163,34 @@ def delete_missing_files(request):
 
 def queue(request):
     jobs = TranscodeJob.objects.select_related(
-        "source", "media_file", "media_file__metadata_record"
+        "media_file__source", "media_file", "media_file__metadata_record"
     ).all()
-    status_filter = request.GET.get("status", "").strip()
     source_filter = request.GET.get("source", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+    data_filter = request.GET.get("data", "").strip()
     name_filter = request.GET.get("name", "").strip()
     if status_filter and status_filter in TranscodeJob.Status.values:
         jobs = jobs.filter(status=status_filter)
     if source_filter:
-        jobs = jobs.filter(source_id=source_filter)
+        jobs = jobs.filter(media_file__source=source_filter)
+    if data_filter:
+        jobs = jobs.filter(media_file__data_source=data_filter)
     if name_filter:
         jobs = jobs.filter(media_file__file_name__icontains=name_filter)
     query = request.GET.copy()
     counts = TranscodeJob.objects.values("status").annotate(total=Count("id"))
     status_counts = {entry["status"]: entry["total"] for entry in counts}
-
     context = {
         "jobs": jobs,
         "status_counts": status_counts,
         "filters": {
             "status": status_filter,
             "source": source_filter,
+            "data": data_filter,
         },
         "query_string": query.urlencode(),
         "sources": MediaSource.objects.order_by("name"),
+        "data_sources": DataSource.objects.order_by("name"),
         "pending_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.PENDING),
         "running_jobs": TranscodeJob.objects.filter(status=TranscodeJob.Status.RUNNING),
         "complete_jobs": TranscodeJob.objects.filter(
