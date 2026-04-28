@@ -90,7 +90,7 @@ def _job_payload(request, job: TranscodeJob) -> dict[str, object]:
         "quality": "HIGH",
         "video_codec": profile.video_codecs[0],
         "audio_codec": profile.audio_codecs[0],
-        "max_bitrate": profile.bitrates[0],
+        "bitrate": profile.bitrate,
     }
     return payload
 

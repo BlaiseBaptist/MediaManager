@@ -89,9 +89,9 @@ class TranscodeProfileAdmin(admin.ModelAdmin):
         "video_codecs",
         "audio_codecs",
         "subtitle_codecs",
-        "bitrates",
+        "bitrate",
     )
-    list_filter = ("container", "video_codecs", "audio_codecs", "bitrates")
+    list_filter = ("container", "video_codecs", "audio_codecs", "bitrate")
 
 
 @admin.register(TranscodeJob)

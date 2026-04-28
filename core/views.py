@@ -89,20 +89,20 @@ def rescan_libary(request):
             stats.needs_processing
         } need processing, {stats.missing} marked missing.",
     )
-    return render(request, "core/media_inven", messages)
+    return redirect("media_inventory")
 
 
+@require_POST
 def reset_failed_jobs(request):
-    if request.method == "POST":
-        TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED).update(
-            status=TranscodeJob.Status.PENDING
-        )
+    TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED).update(
+        status=TranscodeJob.Status.PENDING
+    )
     return redirect("queue")
 
 
+@require_POST
 def delete_all_jobs(request):
-    if request.method == "POST":
-        TranscodeJob.objects.all().delete()
+    TranscodeJob.objects.all().delete()
     return redirect("queue")
 
 
@@ -199,12 +199,11 @@ def queue(request):
     return render(request, "core/queue.html", context)
 
 
+@require_POST
 def update_job_status(request, job_id, status):
     job = get_object_or_404(TranscodeJob, pk=job_id)
-    if request.method != "POST":
-        return _queue_redirect(request)
     if status not in TranscodeJob.Status.values:
-        return _queue_redirect(request)
+        return redirect("queue")
     job.status = status
     if job.media_file_id:
         job.media_file.stage = media_stage_for_job_status(status)
@@ -213,14 +212,12 @@ def update_job_status(request, job_id, status):
     if status != TranscodeJob.Status.FAILED:
         job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
-    return _queue_redirect(request)
+    return redirect("queue")
 
 
+@require_POST
 def requeue_job(request, job_id):
     job = get_object_or_404(TranscodeJob, pk=job_id)
-    if request.method != "POST":
-        return _queue_redirect(request)
-
     job.status = TranscodeJob.Status.PENDING
     job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
@@ -228,11 +225,11 @@ def requeue_job(request, job_id):
         job.media_file.stage = media_stage_for_job_status(TranscodeJob.Status.PENDING)
         job.media_file.is_present = True
         job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
-    return _queue_redirect(request)
+    return redirect("queue")
 
 
+@require_POST
 def delete_job(request, job_id):
     job = get_object_or_404(TranscodeJob, pk=job_id)
-    if request.method == "POST":
-        job.delete()
-    return _queue_redirect(request)
+    job.delete()
+    return redirect("queue")

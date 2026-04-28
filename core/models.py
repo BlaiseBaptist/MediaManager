@@ -78,14 +78,19 @@ class MediaMetadata(models.Model):
     @property
     def matches_target_profile(self) -> bool:
         profile = TranscodeProfile.load()
-        if self.container_format.lower() != profile.container.lower():
+        if profile.container.lower() not in self.container_format.lower():
             return False
-        if not all(codec in profile.video_codecs for codec in self.video_codecs):
+        if self.bitrate > profile.BITRATE:
             return False
-        if not all(codec in profile.audio_codecs for codec in self.audio_codecs):
-            return False
-        if not all(codec in profile.subtitle_codecs for codec in self.subtitle_codecs):
-            return False
+        for codec in self.video_codecs:
+            if codec not in profile.video_codecs:
+                return False
+        for codec in self.audio_codecs:
+            if codec not in profile.audio_codecs:
+                return False
+        for codec in self.subtitle_codecs:
+            if codec not in profile.subtitle_codecs:
+                return False
         return True
 
     def __str__(self) -> str:
@@ -97,12 +102,12 @@ class TranscodeProfile(models.Model):
     VIDEO_CODECS = ["av1"]
     AUDIO_CODECS = ["opus"]
     SUBTITLE_CODECS: list[str] = []
-    BITRATES = ["100M"]
+    BITRATE = 100000000
     container = models.CharField(max_length=120, blank=True, default=CONTAINER)
     video_codecs = models.JSONField(default=list, blank=True)
     audio_codecs = models.JSONField(default=list, blank=True)
     subtitle_codecs = models.JSONField(default=list, blank=True)
-    bitrates = models.JSONField(default=list, blank=True)
+    bitrate = models.BigIntegerField(blank=True, default=BITRATE)
 
     @classmethod
     def load(cls) -> "TranscodeProfile":
@@ -112,7 +117,7 @@ class TranscodeProfile(models.Model):
             "video_codecs": cls.VIDEO_CODECS,
             "audio_codecs": cls.AUDIO_CODECS,
             "subtitle_codecs": cls.SUBTITLE_CODECS,
-            "bitrates": cls.BITRATES,
+            "bitrate": cls.BITRATE,
         }
         changed = False
         for field_name, expected in fixed_values.items():
