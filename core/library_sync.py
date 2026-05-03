@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-
+from django.db import transaction
 from django.utils import timezone
 import requests
 from .models import (
@@ -139,7 +139,6 @@ def _scan_file(file_path: Path, media_file=None) -> tuple[MediaFile, bool, bool]
                 "modified_at",
                 "is_present",
                 "stage",
-                "updated_at",
             ]
         )
 
@@ -161,10 +160,11 @@ def update_file(file_path: Path, data_source: DataSource, media_file=None) -> Sc
     try:
         should_probe = created or changed or metadata is None
         if should_probe:
+            print("probing:", media_file.file_name)
             metadata = collect_metadata_for_media_file(media_file, profile=profile)
     except FileNotFoundError as exc:
         media_file.stage = MediaFile.Stage.FAILED
-        media_file.save(update_fields=["stage", "updated_at"])
+        media_file.save(update_fields=["stage"])
         stats.failed += 1
         raise exc
     except subprocess.CalledProcessError as exc:
@@ -173,7 +173,7 @@ def update_file(file_path: Path, data_source: DataSource, media_file=None) -> Sc
         metadata.raw_probe = {"error": exc.stderr or str(exc)}
         metadata.save()
         media_file.stage = MediaFile.Stage.FAILED
-        media_file.save(update_fields=["stage", "updated_at"])
+        media_file.save(update_fields=["stage"])
         stats.failed += 1
         stats.scanned += 1
         if created:
@@ -187,7 +187,7 @@ def update_file(file_path: Path, data_source: DataSource, media_file=None) -> Sc
         else MediaFile.Stage.TRANSCODE_PENDING
     )
     media_file.data_source = data_source
-    media_file.save(update_fields=["stage", "updated_at", "source", "data_source"])
+    media_file.save(update_fields=["stage", "source", "data_source"])
     _upsert_transcode_job(media_file)
     stats.scanned += 1
     if created:
@@ -235,7 +235,7 @@ def _upsert_transcode_job(media_file: MediaFile):
             update_fields.append("error_message")
         job.media_file = media_file
         if update_fields:
-            job.save(update_fields=[*update_fields, "updated_at"])
+            job.save(update_fields=[*update_fields])
     return
 
 
@@ -345,16 +345,17 @@ def sync_radarr(source: DataSource) -> ScanStats:
         movies = response.json()
     except Exception as e:
         print("Radarr error", str(e))
-    for movie in movies:
-        if movie.get("hasFile", False):
-            file_info = movie.get("movieFile")
-            if not file_info:
-                print(movie, "failed")
-                continue
+        return stats
+    with transaction.atomic():
+        for movie in movies:
+            if movie.get("hasFile", False):
+                file_info = movie.get("movieFile")
+                if not file_info:
+                    print(movie, "failed")
+                    continue
 
-            file_path = Path(file_info["path"])
-            print("updating file at:", file_path)
-            stats += update_file(file_path, source)
+                file_path = Path(file_info["path"])
+                stats += update_file(file_path, source)
 
     return stats
 
@@ -373,17 +374,17 @@ def sync_sonarr(source: DataSource) -> ScanStats:
         series_list = series_res.json()
     except Exception as e:
         print("Sonarr error", str(e))
-    for series in series_list:
-        file_info = requests.get(
-            f"{source.location.rstrip('/')}/api/v3/episodefile",
-            params={"seriesId": series["id"]},
-            headers=headers,
-        )
-        if file_info.status_code != 200:
-            print(series, "failed with code:", file_info.status_code)
-            continue
-        for ef in file_info.json():
-            file_path = Path(ef["path"])
-            print("updating file at:", file_path)
-            stats += update_file(file_path, source)
+    with transaction.atomic():
+        for series in series_list:
+            file_info = requests.get(
+                f"{source.location.rstrip('/')}/api/v3/episodefile",
+                params={"seriesId": series["id"]},
+                headers=headers,
+            )
+            if file_info.status_code != 200:
+                print(series, "failed with code:", file_info.status_code)
+                continue
+            for ef in file_info.json():
+                file_path = Path(ef["path"])
+                stats += update_file(file_path, source)
     return stats

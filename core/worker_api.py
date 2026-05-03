@@ -103,9 +103,9 @@ def _claim_next_job(worker: str) -> TranscodeJob | None:
     )
     with django.db.transaction.atomic():
         candidate = (
-            TranscodeJob.objects.select_related("media_file")
+            TranscodeJob.objects.select_related("media_file__metadata_record")
             .filter(status=TranscodeJob.Status.PENDING)
-            .order_by("priority", "media_file__size_bytes")
+            .order_by("priority", "-media_file__metadata_record__bitrate")
             .select_for_update()
             .first()
         )
