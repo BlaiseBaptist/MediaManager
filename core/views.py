@@ -20,6 +20,10 @@ import shutil
 from pathlib import Path
 
 
+def _queue_redirect(request):
+    return redirect(request.POST.get("next") or reverse("queue"))
+
+
 def home(request):
     context = {
         "source_count": MediaSource.objects.count(),
@@ -78,7 +82,7 @@ def rescan_libary(request):
     for source in DataSource.objects.all():
         if "radarr" in source.name.lower():
             stats += sync_radarr(source)
-        elif "sonarr" in source.name.lower():
+        if "sonarr" in source.name.lower():
             stats += sync_sonarr(source)
     stats.missing += MediaFile.objects.filter(
         data_source=DataSource.objects.get(name="Unknown")
@@ -97,18 +101,18 @@ def reset_failed_jobs(request):
     TranscodeJob.objects.filter(status=TranscodeJob.Status.FAILED).update(
         status=TranscodeJob.Status.PENDING
     )
-    return redirect("queue")
+    return _queue_redirect(request)
 
 
 @require_POST
 def delete_all_jobs(request):
     TranscodeJob.objects.all().delete()
-    return redirect("queue")
+    return _queue_redirect(request)
 
 
 @require_POST
 def delete_missing_files(request):
-    rescan_libary()
+    rescan_libary(request)
     missing_files = MediaFile.objects.filter(stage=MediaFile.Stage.MISSING)
     stats = ScanStats()
     for file in missing_files:
@@ -125,38 +129,87 @@ def delete_missing_files(request):
 @require_POST
 @csrf_exempt
 def arr_webhook(request):
+    response = _arr_webhook(request)
+    print(response)
+    return response
+
+
+def _arr_webhook(request):
     try:
         data = json.loads(request.body)
         event_type = data.get("eventType")
-
         if event_type == "Test":
             return JsonResponse({"status": "ok"})
-
-        remote_path = (
-            data.get("movieFile", {}).get("path")
-            or data.get("episodeFile", {}).get("path")
-            or data.get("path")
-        )
-
-        if not remote_path:
-            return JsonResponse(
-                {"status": "skipped", "message": "No path in payload"}, status=200
-            )
-        source_name = (
-            "Sonarr" if "series" in data else "Radarr" if "movie" in data else "Unknown"
-        )
-        data_source, _ = DataSource.objects.get_or_create(
-            name=source_name,
-            defaults={
-                "location": request.build_absolute_uri("/")
-                if not data.get("instanceName")
-                else "",
-            },
-        )
-        file_path = Path(remote_path).resolve()
-        update_file(file_path)
+        # print(data)
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    if event_type == "EpisodeFileDelete":
+        return _sonarr_delete_data(data)
+    if event_type == "Download":
+        print("download")
+        return _add_data(data)
+    if event_type == "Rename":
+        print("rename")
+        return _rename_data(data)
+    return JsonResponse({"status": "error", "message": "todo!"}, status=503)
+
+
+def _sonarr_delete_data(data):
+    file = data.get("episodeFile")
+    deleted_count, delete_info = MediaFile.objects.filter(
+        absolute_path=file.get("path")
+    ).delete()
+    if deleted_count == 0:
+        return JsonResponse(
+            {
+                "status": "delete",
+                "message": "could not find any matching files assuming ok",
+            },
+            status=200,
+        )
+    return JsonResponse({"status": "delete", "message": str(delete_info)}, status=200)
+
+
+def _radarr_delete_data(data):
+    # TODO: add radarr support
+    return JsonResponse({"status": "error", "message": "todo!"}, status=503)
+
+
+def _rename_data(data):
+    data_source = get_object_or_404(DataSource, name=data.get("instanceName"))
+    stats = ScanStats()
+    if data_source.name == "Sonarr":
+        renamed_files = data.get("renamedEpisodeFiles")
+    if data_source.name == "Radarr":
+        renamed_files = data.get("renamedMovieFiles")
+    if renamed_files is None:
+        return JsonResponse(
+            {"status": "error", "message": "unsupported format"}, status=400
+        )
+    for file in renamed_files:
+        old_path = file.get("previousRelativePath")
+        renamed = get_object_or_404(MediaFile, relative_path=old_path)
+        new_path = Path(file.get("path"))
+        stats += update_file(new_path, data_source, renamed)
+    return JsonResponse({"status": "rename", "message": str(stats)}, status=200)
+
+
+def _add_data(data):
+    data_source = get_object_or_404(DataSource, name=data.get("instanceName"))
+    stats = ScanStats()
+    if data_source.name == "Sonarr":
+        added_files = data.get("episodeFiles")
+    if data_source.name == "Radarr":
+        # TODO: add radarr support
+        return JsonResponse({"status": "error", "message": "todo!"}, status=503)
+    if added_files is None:
+        return JsonResponse(
+            {"status": "error", "message": "unknown service or bad request"}, status=400
+        )
+    for file in added_files:
+        new_path = Path(file.get("path"))
+        stats += update_file(new_path, data_source)
+    return JsonResponse({"status": "add", "message": str(stats)}, status=200)
 
 
 def queue(request):
@@ -203,7 +256,7 @@ def queue(request):
 def update_job_status(request, job_id, status):
     job = get_object_or_404(TranscodeJob, pk=job_id)
     if status not in TranscodeJob.Status.values:
-        return redirect("queue")
+        return _queue_redirect(request)
     job.status = status
     if job.media_file_id:
         job.media_file.stage = media_stage_for_job_status(status)
@@ -212,7 +265,7 @@ def update_job_status(request, job_id, status):
     if status != TranscodeJob.Status.FAILED:
         job.error_message = ""
     job.save(update_fields=["status", "error_message", "updated_at"])
-    return redirect("queue")
+    return _queue_redirect(request)
 
 
 @require_POST
@@ -225,11 +278,11 @@ def requeue_job(request, job_id):
         job.media_file.stage = media_stage_for_job_status(TranscodeJob.Status.PENDING)
         job.media_file.is_present = True
         job.media_file.save(update_fields=["stage", "is_present", "updated_at"])
-    return redirect("queue")
+    return _queue_redirect(request)
 
 
 @require_POST
 def delete_job(request, job_id):
     job = get_object_or_404(TranscodeJob, pk=job_id)
     job.delete()
-    return redirect("queue")
+    return _queue_redirect(request)

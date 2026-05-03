@@ -286,6 +286,9 @@
 									<div class="meta">
 										Subtitle: {{ file.metadata_record.subtitle_codecs|join:", "|default:"-" }}
 									</div>
+									<div class="meta">
+										Bitrate: {{ file.metadata_record.bitrate|join:", "|default:"-" }}
+									</div>
 									{% else %}
 									<span class="meta">No metadata yet</span>
 									{% endif %}

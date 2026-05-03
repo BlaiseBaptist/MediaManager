@@ -44,6 +44,18 @@ class ScanStats:
     needs_processing: int = 0
     failed: int = 0
 
+    def __str__(self) -> str:
+        return (
+            f"Scan Summary:\n"
+            f"  Scanned:          {self.scanned}\n"
+            f"  Created:          {self.created}\n"
+            f"  Updated:          {self.updated}\n"
+            f"  Missing:          {self.missing}\n"
+            f"  Complete:         {self.complete}\n"
+            f"  Needs Processing: {self.needs_processing}\n"
+            f"  Failed:           {self.failed}"
+        )
+
     def __add__(self, other: ScanStats):
         return ScanStats(
             self.scanned + other.scanned,
@@ -81,7 +93,7 @@ def _iter_media_files(root: Path):
             yield candidate
 
 
-def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
+def _scan_file(file_path: Path, media_file=None) -> tuple[MediaFile, bool, bool]:
     source_path = _top_level_source(file_path)
     source = _media_source_for(source_path)
     relative_path = str(file_path.relative_to(source_path))
@@ -89,18 +101,21 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
     modified_at = datetime.fromtimestamp(
         stat.st_mtime, tz=timezone.get_current_timezone()
     )
-    media_file, created = MediaFile.objects.get_or_create(
-        source=source,
-        relative_path=relative_path,
-        defaults={
-            "absolute_path": str(file_path),
-            "file_name": file_path.name,
-            "size_bytes": stat.st_size,
-            "modified_at": modified_at,
-            "stage": MediaFile.Stage.DISCOVERED,
-            "is_present": True,
-        },
-    )
+    if media_file is None:
+        media_file, created = MediaFile.objects.get_or_create(
+            source=source,
+            relative_path=relative_path,
+            defaults={
+                "absolute_path": str(file_path),
+                "file_name": file_path.name,
+                "size_bytes": stat.st_size,
+                "modified_at": modified_at,
+                "stage": MediaFile.Stage.DISCOVERED,
+                "is_present": True,
+            },
+        )
+    else:
+        created = False
     changed = (
         media_file.absolute_path != str(file_path)
         or media_file.file_name != file_path.name
@@ -131,16 +146,20 @@ def _scan_file(file_path: Path) -> tuple[MediaFile, bool, bool]:
     return media_file, created, changed
 
 
-def update_file(file_path: Path, data_source: DataSource) -> ScanStats:
+def update_file(file_path: Path, data_source: DataSource, media_file=None) -> ScanStats:
     stats = ScanStats()
-    media_file, created, changed = _scan_file(file_path)
     profile = TranscodeProfile.load()
+    if media_file is None:
+        media_file, created, changed = _scan_file(file_path)
+    else:
+        media_file, created, changed = _scan_file(file_path, media_file)
+    stats.failed += 1
     try:
         metadata = media_file.metadata_record
     except MediaMetadata.DoesNotExist:
         metadata = None
-    should_probe = created or changed or metadata is None
     try:
+        should_probe = created or changed or metadata is None
         if should_probe:
             metadata = collect_metadata_for_media_file(media_file, profile=profile)
     except FileNotFoundError as exc:
@@ -324,16 +343,20 @@ def sync_radarr(source: DataSource) -> ScanStats:
         )
         response.raise_for_status()
         movies = response.json()
-    finally:
-        for movie in movies:
+    except Exception as e:
+        print("Radarr error", str(e))
+    for movie in movies:
+        if movie.get("hasFile", False):
             file_info = movie.get("movieFile")
             if not file_info:
+                print(movie, "failed")
                 continue
 
             file_path = Path(file_info["path"])
+            print("updating file at:", file_path)
             stats += update_file(file_path, source)
 
-        return stats
+    return stats
 
 
 def sync_sonarr(source: DataSource) -> ScanStats:
@@ -348,17 +371,19 @@ def sync_sonarr(source: DataSource) -> ScanStats:
         )
         series_res.raise_for_status()
         series_list = series_res.json()
-        for series in series_list:
-            file_res = requests.get(
-                f"{source.location.rstrip('/')}/api/v3/episodefile",
-                params={"seriesId": series["id"]},
-                headers=headers,
-            )
-            if file_res.status_code != 200:
-                continue
-
-            for ef in file_res.json():
-                file_path = Path(ef["path"])
-                stats += update_file(file_path, source)
-    finally:
-        return stats
+    except Exception as e:
+        print("Sonarr error", str(e))
+    for series in series_list:
+        file_info = requests.get(
+            f"{source.location.rstrip('/')}/api/v3/episodefile",
+            params={"seriesId": series["id"]},
+            headers=headers,
+        )
+        if file_info.status_code != 200:
+            print(series, "failed with code:", file_info.status_code)
+            continue
+        for ef in file_info.json():
+            file_path = Path(ef["path"])
+            print("updating file at:", file_path)
+            stats += update_file(file_path, source)
+    return stats

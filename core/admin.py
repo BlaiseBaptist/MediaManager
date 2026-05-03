@@ -50,6 +50,7 @@ class MediaFileAdmin(admin.ModelAdmin):
         "stage",
         "data_source__name",
     )
+    search_fields = ("file_name", "source__name")
     raw_id_fields = ("source", "data_source")
     date_hierarchy = "created_at"
 
