@@ -105,7 +105,11 @@ def _claim_next_job(worker: str) -> TranscodeJob | None:
         candidate = (
             TranscodeJob.objects.select_related("media_file__metadata_record")
             .filter(status=TranscodeJob.Status.PENDING)
-            .order_by("priority", "-media_file__metadata_record__bitrate")
+            .order_by(
+                "priority",
+                "-media_file__metadata_record__bitrate",
+                "media_file__size_bytes",
+            )
             .select_for_update()
             .first()
         )

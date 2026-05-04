@@ -129,33 +129,39 @@ def delete_missing_files(request):
 @require_POST
 @csrf_exempt
 def arr_webhook(request):
-    response = _arr_webhook(request)
-    print(response)
-    return response
-
-
-def _arr_webhook(request):
     try:
         data = json.loads(request.body)
         event_type = data.get("eventType")
         if event_type == "Test":
             return JsonResponse({"status": "ok"})
-        # print(data)
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
-    if event_type == "EpisodeFileDelete":
-        return _sonarr_delete_data(data)
-    if event_type == "Download":
-        print("download")
-        return _add_data(data)
-    if event_type == "Rename":
-        print("rename")
-        return _rename_data(data)
+    try:
+        if event_type == "EpisodeFileDelete":
+            return _sonarr_delete_data(data)
+        if event_type == "MovieFileDelete":
+            return _radarr_delete_data(data)
+        if event_type == "Download":
+            return _add_data(data)
+        if event_type == "Rename":
+            return _rename_data(data)
+    except Exception as e:
+        print(data)
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
     return JsonResponse({"status": "error", "message": "todo!"}, status=503)
 
 
 def _sonarr_delete_data(data):
     file = data.get("episodeFile")
+    return _delete_file_record(file)
+
+
+def _radarr_delete_data(data):
+    file = data.get("movieFile")
+    return _delete_file_record(file)
+
+
+def _delete_file_record(file):
     deleted_count, delete_info = MediaFile.objects.filter(
         absolute_path=file.get("path")
     ).delete()
@@ -163,16 +169,11 @@ def _sonarr_delete_data(data):
         return JsonResponse(
             {
                 "status": "delete",
-                "message": "could not find any matching files assuming ok",
+                "message": "could not find any matching files, assuming ok",
             },
             status=200,
         )
     return JsonResponse({"status": "delete", "message": str(delete_info)}, status=200)
-
-
-def _radarr_delete_data(data):
-    # TODO: add radarr support
-    return JsonResponse({"status": "error", "message": "todo!"}, status=503)
 
 
 def _rename_data(data):
@@ -200,6 +201,7 @@ def _add_data(data):
     if data_source.name == "Sonarr":
         added_files = data.get("episodeFiles")
     if data_source.name == "Radarr":
+        added_files = [data.get("movieFile")]
         # TODO: add radarr support
         return JsonResponse({"status": "error", "message": "todo!"}, status=503)
     if added_files is None:
